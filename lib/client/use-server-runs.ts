@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ScrapeRun } from "@/components/dashboard/types";
 
 /**
@@ -9,16 +9,15 @@ import type { ScrapeRun } from "@/components/dashboard/types";
  * Responsibilities:
  * - Load runs from `/api/runs` on mount
  * - Persist new runs to the server after each scrape
- * - Keep local state in sync (optimistic UI)
+ * - Send X-Workspace-Id when workspaceId is provided (Phase 1)
  * - Gracefully degrade if the API is unavailable (e.g. demo mode)
- *
- * The dashboard owns the `runs` state; this hook provides
- * `loadRuns` and `persistRun` as pure async functions.
  */
 
 interface UseServerRunsOptions {
-  /** When true, all API calls are skipped */
+  /** When true, all API calls are skipped (e.g. demo mode) */
   disabled?: boolean;
+  /** Workspace id to send as X-Workspace-Id. When null/undefined, server uses primary. */
+  workspaceId?: string | null;
 }
 
 interface UseServerRunsReturn {
@@ -32,21 +31,27 @@ interface UseServerRunsReturn {
   error: string | null;
 }
 
-export function useServerRuns({ disabled = false }: UseServerRunsOptions = {}): UseServerRunsReturn {
+export function useServerRuns({
+  disabled = false,
+  workspaceId = null,
+}: UseServerRunsOptions = {}): UseServerRunsReturn {
   const [loading, setLoading] = useState(!disabled);
   const [error, setError] = useState<string | null>(null);
-
-  // Track if initial load has been triggered to prevent double-fires in StrictMode
-  const loadedRef = useRef(false);
 
   const loadRuns = useCallback(async (): Promise<ScrapeRun[] | null> => {
     if (disabled) return null;
 
     try {
       setError(null);
-      const res = await fetch("/api/runs");
+      const headers: HeadersInit = {};
+      if (workspaceId) (headers as Record<string, string>)["X-Workspace-Id"] = workspaceId;
+      const res = await fetch("/api/runs", { headers });
 
       if (res.status === 401) return null; // Not authenticated
+      if (res.status === 403) {
+        setError("Forbidden");
+        return null;
+      }
       if (!res.ok) {
         setError(`Failed to load runs (${res.status})`);
         return null;
@@ -60,18 +65,21 @@ export function useServerRuns({ disabled = false }: UseServerRunsOptions = {}): 
     } finally {
       setLoading(false);
     }
-  }, [disabled]);
+  }, [disabled, workspaceId]);
 
   const persistRun = useCallback(async (run: ScrapeRun): Promise<ScrapeRun | null> => {
     if (disabled) return run; // In demo mode, just return as-is
 
     try {
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (workspaceId) (headers as Record<string, string>)["X-Workspace-Id"] = workspaceId;
       const res = await fetch("/api/runs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           provider: run.provider,
           prompt: run.prompt,
+          promptId: run.promptId ?? null,
           answer: run.answer,
           sources: run.sources,
           visibilityScore: run.visibilityScore,
@@ -93,7 +101,7 @@ export function useServerRuns({ disabled = false }: UseServerRunsOptions = {}): 
       console.error("[useServerRuns] Persist error:", err);
       return run;
     }
-  }, [disabled]);
+  }, [disabled, workspaceId]);
 
   // Mark loading as false immediately if disabled
   useEffect(() => {
