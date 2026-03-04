@@ -88,7 +88,15 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     // Try og:site_name first (most reliable)
     const ogSiteName = this.extractMeta(html, ['og:site_name']);
     if (ogSiteName && ogSiteName.length >= 2) {
-      return this.cleanBrandName(ogSiteName);
+      const cleaned = this.cleanBrandName(ogSiteName);
+      // If cleaned name is still too long, use NER
+      if (cleaned && cleaned.length > 30) {
+        const nerName = this.extractOrganizationWithNER(ogSiteName);
+        if (nerName) {
+          return nerName;
+        }
+      }
+      return cleaned;
     }
 
     // Try application/name meta tag
@@ -102,6 +110,13 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     if (ogTitle) {
       const cleaned = this.cleanBrandName(ogTitle);
       if (cleaned && cleaned.length >= 2) {
+        // If cleaned name is still too long, use NER
+        if (cleaned.length > 30) {
+          const nerName = this.extractOrganizationWithNER(ogTitle);
+          if (nerName) {
+            return nerName;
+          }
+        }
         return cleaned;
       }
     }
@@ -111,7 +126,17 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     if (titleMatch) {
       const title = titleMatch[1].trim();
       const cleaned = this.cleanBrandName(title);
-      return cleaned && cleaned.length >= 2 ? cleaned : title;
+      if (cleaned) {
+        // If cleaned name is still too long, use NER
+        if (cleaned.length > 30) {
+          const nerName = this.extractOrganizationWithNER(title);
+          if (nerName) {
+            return nerName;
+          }
+        }
+        return cleaned && cleaned.length >= 2 ? cleaned : title;
+      }
+      return title;
     }
 
     // Try h1 tag
@@ -124,6 +149,56 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     }
 
     return null;
+  }
+
+  /**
+   * Extract organization name using NER (Named Entity Recognition)
+   * Uses compromise library for lightweight NER
+   */
+  private extractOrganizationWithNER(text: string): string | null {
+    try {
+      // Dynamic import to avoid requiring the library if not installed
+      // Users can install with: npm install compromise
+      let doc;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const compromise = require('compromise');
+        doc = compromise(text);
+      } catch {
+        // compromise not installed, skip NER
+        return null;
+      }
+      
+      // Extract organization entities
+      const organizations: string[] = doc.organizations().out('array');
+      
+      if (organizations.length > 0) {
+        // Return the first organization found
+        const orgName = organizations[0];
+        if (orgName && orgName.length >= 2 && orgName.length <= 30) {
+          return orgName;
+        }
+      }
+      
+      // Try to find company suffixes in the text
+      const companySuffixes = /\b(Inc\.?|LLC|Ltd\.?|Corp\.?|Corporation|Company|Co\.?)\b/i;
+      const suffixMatch = text.match(companySuffixes);
+      if (suffixMatch) {
+        // Find the start of the company name (look backwards from suffix)
+        const suffixIndex = text.indexOf(suffixMatch[0]);
+        const beforeSuffix = text.substring(0, suffixIndex).trim();
+        // Get the last few words before the suffix
+        const words = beforeSuffix.split(/\s+/);
+        const companyName = words.slice(-3).join(' ') + ' ' + suffixMatch[0];
+        if (companyName.length <= 30) {
+          return companyName.trim();
+        }
+      }
+      
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   private cleanBrandName(text: string): string | null {
