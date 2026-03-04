@@ -51,10 +51,34 @@ const TWITTER_PATTERNS = [
       return null;
     }
   },
-  // Anchor tags with x.com URLs (without www, various protocols)
+  // Anchor tags with x.com URLs (with or without www, various protocols)
   {
     type: 'link',
-    pattern: /<a\s+[^>]*href=["'](https?:\/\/x\.com\/([a-zA-Z0-9_]+))["'][^>]*>/gi,
+    pattern: /<a\s+[^>]*href=["'](https?:\/\/(?:www\.)?x\.com\/([a-zA-Z0-9_]+))["'][^>]*>/gi,
+    extract: (match: RegExpExecArray) => {
+      const handle = match[2]?.toLowerCase();
+      if (handle && handle.length >= 2 && handle.length <= 15) {
+        return handle;
+      }
+      return null;
+    }
+  },
+  // Anchor tags with x.com URLs (protocol-less, e.g., x.com/handle)
+  {
+    type: 'link',
+    pattern: /<a\s+[^>]*href=["'](x\.com\/([a-zA-Z0-9_]+))["'][^>]*>/gi,
+    extract: (match: RegExpExecArray) => {
+      const handle = match[2]?.toLowerCase();
+      if (handle && handle.length >= 2 && handle.length <= 15) {
+        return handle;
+      }
+      return null;
+    }
+  },
+  // Anchor tags with protocol-relative x.com URLs (e.g., //x.com/handle)
+  {
+    type: 'link',
+    pattern: /<a\s+[^>]*href=["'](\/\/x\.com\/([a-zA-Z0-9_]+))["'][^>]*>/gi,
     extract: (match: RegExpExecArray) => {
       const handle = match[2]?.toLowerCase();
       if (handle && handle.length >= 2 && handle.length <= 15) {
@@ -204,12 +228,29 @@ const LINKEDIN_PATTERNS = [
 ];
 
 /**
+ * Decode Unicode escapes in HTML (e.g., \u003c to <)
+ * Some sites embed meta tags in JavaScript strings with Unicode escapes
+ */
+function decodeUnicodeEscapes(html: string): string {
+  return html
+    .replace(/\\u003c/g, '<')
+    .replace(/\\u003e/g, '>')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t');
+}
+
+/**
  * Extract Twitter handle from HTML
  */
 export function extractTwitterHandle(html: string): string | null {
+  // Decode Unicode escapes first (some sites embed meta tags in JS strings)
+  const decodedHtml = decodeUnicodeEscapes(html);
+  
   // Try meta tag first
   const metaPattern = TWITTER_PATTERNS[0];
-  const metaMatch = html.match(new RegExp(
+  const metaMatch = decodedHtml.match(new RegExp(
     `<meta\\s+[^>]*name=["']${metaPattern.selector}["'][^>]*content=["']([^"']*)["']`,
     'i'
   ));
@@ -226,7 +267,7 @@ export function extractTwitterHandle(html: string): string | null {
     const regex = new RegExp(pattern.pattern.source, pattern.pattern.flags);
     let match: RegExpExecArray | null;
     
-    while ((match = regex.exec(html)) !== null) {
+    while ((match = regex.exec(decodedHtml)) !== null) {
       const result = (pattern.extract as (m: RegExpExecArray) => string | null)(match);
       if (result) return result;
     }
@@ -262,26 +303,49 @@ export function extractLinkedinUrl(html: string): string | null {
 export function extractSocialFromStructuredData(html: string): { twitter?: string; linkedin?: string } {
   const result: { twitter?: string; linkedin?: string } = {};
   
+  // Decode Unicode escapes first
+  const decodedHtml = decodeUnicodeEscapes(html);
+  
   const jsonLdRegex = /<script\s+[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let match;
   
-  while ((match = jsonLdRegex.exec(html)) !== null) {
+  while ((match = jsonLdRegex.exec(decodedHtml)) !== null) {
     try {
       const jsonContent = match[1];
-      const json = JSON.parse(jsonContent);
+      
+      // Debug logging
+      if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('[extractSocialFromStructuredData] Found JSON-LD:', jsonContent.substring(0, 200));
+      }
+      
+      // Clean the JSON content - remove trailing commas that can break JSON parsing
+      // Don't remove // comments as they might be part of URLs (e.g., https://)
+      const cleanedContent = jsonContent
+        .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+        .replace(/,\s*]/g, ']'); // Remove trailing commas before ]
+      
+      const json = JSON.parse(cleanedContent);
       const items = Array.isArray(json) ? json : [json];
       
       for (const item of items) {
         const sameAs = item.sameAs;
         const urls = Array.isArray(sameAs) ? sameAs : (typeof sameAs === "string" ? [sameAs] : []);
         
+        // Debug logging
+        if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development' && urls.length > 0) {
+          console.log('[extractSocialFromStructuredData] Found sameAs URLs:', urls);
+        }
+        
         for (const url of urls) {
           if (typeof url !== "string") continue;
           
-          if (!result.twitter && url.includes('twitter.com/')) {
-            const twitterMatch = url.match(/twitter\.com\/[@]?([a-z0-9_]+)/i);
+          if (!result.twitter && (url.includes('twitter.com/') || url.includes('x.com/'))) {
+            const twitterMatch = url.match(/(?:twitter|x)\.com\/[@]?([a-z0-9_]+)/i);
             if (twitterMatch) {
               result.twitter = twitterMatch[1].toLowerCase();
+              if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+                console.log('[extractSocialFromStructuredData] Extracted Twitter handle:', result.twitter);
+              }
             }
           }
           
@@ -290,8 +354,11 @@ export function extractSocialFromStructuredData(html: string): { twitter?: strin
           }
         }
       }
-    } catch {
-      // Invalid JSON, skip
+    } catch (error) {
+      // Debug logging for errors
+      if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.error('[extractSocialFromStructuredData] JSON parse error:', error);
+      }
     }
   }
   

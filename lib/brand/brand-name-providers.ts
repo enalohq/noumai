@@ -81,12 +81,24 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     let twitterHandle = structuredData.twitter || null;
     let linkedinHandle = structuredData.linkedin || null;
     
+    // Debug logging
+    if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('[HtmlScrapingProvider] Structured data extraction:', structuredData);
+    }
+    
     // Fallback to HTML extraction if not found in structured data
     if (!twitterHandle) {
       twitterHandle = extractTwitterHandle(html);
+      if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('[HtmlScrapingProvider] HTML extraction fallback:', twitterHandle);
+      }
     }
     if (!linkedinHandle) {
       linkedinHandle = extractLinkedinUrl(html);
+    }
+    
+    if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+      console.log('[HtmlScrapingProvider] Final result:', { brandName, twitterHandle, linkedinHandle });
     }
     
     return { brandName, twitterHandle, linkedinHandle };
