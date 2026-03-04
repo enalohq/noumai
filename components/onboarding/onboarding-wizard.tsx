@@ -208,7 +208,7 @@ export function OnboardingWizard() {
           style={{ height: "75vh", minHeight: "520px" }}
         >
         {/* Left panel — inputs */}
-        <div className="flex w-[420px] shrink-0 flex-col border-r border-th-border">
+        <div className="flex w-[462px] shrink-0 flex-col border-r border-th-border">
           {/* Header */}
           <div className="border-b border-th-border px-7 py-4">
             <div className="flex items-center gap-2">
