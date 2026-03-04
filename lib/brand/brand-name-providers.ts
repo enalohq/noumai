@@ -157,8 +157,26 @@ export class HtmlScrapingProvider implements BrandNameProvider {
    * Falls back to URL hostname if NER doesn't find anything
    */
   private extractOrganizationWithNER(text: string, url?: string): string | null {
+    // If URL is provided, use it as the primary source for brand name
+    // This is more reliable than NER for detecting brand names from metadata
+    if (url) {
+      try {
+        const urlObj = new URL(url);
+        const hostname = urlObj.hostname.replace(/^www\./i, '');
+        const parts = hostname.split('.');
+        const mainPart = parts[0];
+        // Convert to title case
+        const brandName = mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
+        if (brandName.length >= 2 && brandName.length <= 25) {
+          return brandName;
+        }
+      } catch {
+        // Invalid URL, continue with NER
+      }
+    }
+    
+    // Try NER as secondary source
     try {
-      // Try NER first
       let doc;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -166,7 +184,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
         doc = compromise(text);
       } catch {
         // compromise not installed, skip NER
-        // Fall through to URL fallback
+        return null;
       }
       
       if (doc) {
@@ -196,28 +214,11 @@ export class HtmlScrapingProvider implements BrandNameProvider {
           }
         }
       }
-      
-      // Fallback: Extract brand name from URL hostname
-      if (url) {
-        try {
-          const urlObj = new URL(url);
-          const hostname = urlObj.hostname.replace(/^www\./i, '');
-          const parts = hostname.split('.');
-          const mainPart = parts[0];
-          // Convert to title case
-          const brandName = mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
-          if (brandName.length >= 2 && brandName.length <= 25) {
-            return brandName;
-          }
-        } catch {
-          // Invalid URL, skip
-        }
-      }
-      
-      return null;
     } catch {
-      return null;
+      // NER failed, continue
     }
+    
+    return null;
   }
 
   private cleanBrandName(text: string): string | null {
@@ -234,26 +235,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
       .replace(/\s*[-–—]\s*(bulk|manufacturer|distributor|supplier|wholesale|retail|store|shop|online|india|usa|uk|co\.?m?|org|net|io).*$/i, '') // Remove common business descriptors
       .trim();
     
-    // Enforce max length (30 characters as per requirement)
-    const maxLength = 30;
-    if (cleaned.length > maxLength) {
-      // Try to truncate at a word boundary
-      const truncated = cleaned.substring(0, maxLength);
-      const lastSpace = truncated.lastIndexOf(' ');
-      const lastDash = truncated.lastIndexOf('-');
-      const lastUnderscore = truncated.lastIndexOf('_');
-      
-      // Find the best boundary (prefer spaces, then dashes, then underscores)
-      const bestBoundary = Math.max(lastSpace, lastDash, lastUnderscore);
-      
-      if (bestBoundary > 5) {  // Ensure we keep at least 5 characters
-        return cleaned.substring(0, bestBoundary).trim();
-      }
-      
-      // If no good boundary found, just truncate
-      return truncated.trim();
-    }
-    
+    // Return the cleaned name - caller will handle length validation
     return cleaned && cleaned.length >= 2 ? cleaned : null;
   }
 
