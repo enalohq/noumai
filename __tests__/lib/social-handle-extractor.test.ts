@@ -7,6 +7,7 @@ import {
   extractTwitterHandle,
   extractLinkedinUrl,
   extractSocialFromStructuredData,
+  decodeUnicodeEscapes,
 } from '@/lib/brand/social-handle-extractor';
 
 describe('extractTwitterHandle', () => {
@@ -469,6 +470,33 @@ describe('extractSocialFromStructuredData', () => {
         </html>
       `;
       expect(extractTwitterHandle(html)).toBe('amazonin');
+    });
+  });
+  
+  describe('Property-based tests for Unicode escape handling', () => {
+    it('extracts Twitter handles from various Unicode-escaped formats', () => {
+      // Test various handle patterns
+      const testHandles = [
+        'testuser123',
+        'test_user',
+        'test123',
+        'mybrand',
+        'amazonIN',
+        'beautybarnindia',
+      ];
+      
+      for (const handle of testHandles) {
+        const html = `
+          <html>
+            <head>
+              <script>
+                var meta = "\\u003cmeta name=\\"twitter:site\\" content=\\"@${handle}\\" /\\u003e";
+              </script>
+            </head>
+          </html>
+        `;
+        expect(extractTwitterHandle(html)).toBe(handle.toLowerCase());
+      }
     });
   });
     it('extracts Twitter handle from x.com URL without protocol', () => {

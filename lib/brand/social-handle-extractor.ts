@@ -231,7 +231,7 @@ const LINKEDIN_PATTERNS = [
  * Decode Unicode escapes in HTML (e.g., \u003c to <)
  * Some sites embed meta tags in JavaScript strings with Unicode escapes
  */
-function decodeUnicodeEscapes(html: string): string {
+export function decodeUnicodeEscapes(html: string): string {
   return html
     .replace(/\\u003c/g, '<')
     .replace(/\\u003e/g, '>')
