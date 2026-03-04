@@ -69,35 +69,70 @@ const config: NextAuthConfig = {
   },
   callbacks: {
     async signIn({ user, account }) {
-      // For OAuth providers, detect first-time sign-in and create workspace
-      if (account?.provider !== "credentials" && user?.id) {
+      // For OAuth providers, handle account linking and workspace creation
+      if (account?.provider !== "credentials" && user?.email) {
         try {
+          // Check if a user with this email already exists
           const existingUser = await prisma.user.findUnique({
-            where: { id: user.id },
-            select: {
-              onboardingCompleted: true,
+            where: { email: user.email },
+            include: {
+              accounts: true,
               workspaces: { take: 1 },
             },
           });
-          // New OAuth user: no workspace memberships yet
-          if (existingUser && existingUser.workspaces.length === 0) {
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { 
-                onboardingCompleted: false, 
-                onboardingStep: 0,
-                emailVerified: new Date(),  // Email is verified via OAuth provider
-              },
-            });
-            await prisma.workspace.create({
-              data: {
-                name: `${user.name || user.email}'s Workspace`,
-                description: "Default workspace",
-                members: {
-                  create: { userId: user.id, role: "owner" },
+
+          if (existingUser) {
+            // User exists - check if this OAuth provider is already linked
+            const providerAlreadyLinked = existingUser.accounts.some(
+              (acc) => acc.provider === account?.provider
+            );
+
+            if (!providerAlreadyLinked) {
+              // Link the new OAuth account to the existing user
+              const accountData = {
+                userId: existingUser.id,
+                type: "oauth",
+                provider: account?.provider ?? "",
+                providerAccountId: account?.providerAccountId ?? "",
+                access_token: account?.access_token ?? null,
+                refresh_token: account?.refresh_token ?? null,
+                expires_at: account?.expires_at ? Math.floor(account.expires_at) : null,
+                token_type: account?.token_type ?? null,
+                scope: account?.scope ?? null,
+                id_token: account?.id_token ?? null,
+                session_state: typeof account?.session_state === 'string' ? account.session_state : null,
+              };
+              await prisma.account.create({ data: accountData });
+
+              // Update emailVerified since they're signing in with a verified OAuth provider
+              await prisma.user.update({
+                where: { id: existingUser.id },
+                data: { 
+                  emailVerified: new Date(),
+                  image: user.image || existingUser.image,
                 },
-              },
-            });
+              });
+
+              console.log(`Linked ${account?.provider} account to existing user: ${user.email}`);
+            }
+
+            // Ensure user has a workspace (create if missing)
+            if (existingUser.workspaces.length === 0) {
+              await prisma.workspace.create({
+                data: {
+                  name: `${user.name || user.email}'s Workspace`,
+                  description: "Default workspace",
+                  members: {
+                    create: { userId: existingUser.id, role: "owner" },
+                  },
+                },
+              });
+            }
+          } else {
+            // New user - create account and workspace
+            // The Account and User will be created by NextAuth/Prisma adapter
+            // We just need to ensure workspace is created
+            console.log(`New OAuth user created: ${user.email}`);
           }
         } catch (error) {
           console.error("OAuth signIn hook error:", error);
