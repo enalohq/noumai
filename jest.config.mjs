@@ -11,6 +11,9 @@ const customJestConfig = {
   // Add more setup options before each test is run
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   
+  // Enable code coverage reporting by default
+  collectCoverage: true,
+  
   // Use jsdom for React testing
   testEnvironment: 'jest-environment-jsdom',
   
