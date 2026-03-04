@@ -51,6 +51,18 @@ const TWITTER_PATTERNS = [
       return null;
     }
   },
+  // Anchor tags with x.com URLs (without www, various protocols)
+  {
+    type: 'link',
+    pattern: /<a\s+[^>]*href=["'](https?:\/\/x\.com\/([a-zA-Z0-9_]+))["'][^>]*>/gi,
+    extract: (match: RegExpExecArray) => {
+      const handle = match[2]?.toLowerCase();
+      if (handle && handle.length >= 2 && handle.length <= 15) {
+        return handle;
+      }
+      return null;
+    }
+  },
   // Anchor tags with rel="me" and Twitter URL
   {
     type: 'link',

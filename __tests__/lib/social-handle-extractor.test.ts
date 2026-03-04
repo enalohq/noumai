@@ -371,3 +371,69 @@ describe('extractSocialFromStructuredData', () => {
     });
   });
 });
+  describe('x.com URL variations', () => {
+    it('extracts Twitter handle from x.com URL with https', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="https://x.com/beautybarnindia">Follow us</a>
+          </body>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
+
+    it('extracts Twitter handle from x.com URL with http', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="http://x.com/beautybarnindia">Follow us</a>
+          </body>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
+
+    it('extracts Twitter handle from x.com URL with trailing slash', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="https://x.com/beautybarnindia/">Follow us</a>
+          </body>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
+
+    it('extracts Twitter handle from x.com URL with query parameters', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="https://x.com/beautybarnindia?ref=footer">Follow us</a>
+          </body>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
+
+    it('extracts Twitter handle from x.com URL without www in anchor text', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="https://x.com/beautybarnindia" aria-label="Follow us on x">x.com/beautybarnindia</a>
+          </body>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
+  });
+    it('extracts Twitter handle from x.com URL without protocol', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="x.com/beautybarnindia">Follow us</a>
+          </body>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
