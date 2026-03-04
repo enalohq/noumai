@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 /** Inline script to apply theme before first paint — prevents flash */
-const themeScript = `(function(){try{var t=sessionStorage.getItem('sovereign-theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`;
+const themeScript = `(function(){try{var t=sessionStorage.getItem('noumai-theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`;
 
 export default function RootLayout({
   children,

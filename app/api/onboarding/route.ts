@@ -32,6 +32,8 @@ export async function GET() {
               brandName: true,
               brandAliases: true,
               website: true,
+              twitterHandle: true,
+              linkedinHandle: true,
               industry: true,
               brandDescription: true,
               targetKeywords: true,

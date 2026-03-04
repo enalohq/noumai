@@ -86,7 +86,7 @@ export function StepPrompts({ brandName, data, onChange }: StepPromptsProps) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-th-text-muted">
-        These prompts are auto-generated from your brand details. Select the ones you want to track, or add your own. You can always edit them later in the Prompt Hub.
+        These prompts are auto-generated from your brand details. Select the ones you want to track, or add your own. You can always edit them later in the Prompts tab.
       </p>
 
       {/* Custom prompt input */}

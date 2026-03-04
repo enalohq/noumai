@@ -1,6 +1,6 @@
 "use client";
 
-import { SovereignDashboard } from "@/components/sovereign-dashboard";
+import { NoumAIDashboard } from "@/components/noumai-dashboard";
 
 export function DashboardPreview() {
   return (
@@ -14,7 +14,7 @@ export function DashboardPreview() {
           height: "172%",
         }}
       >
-        <SovereignDashboard demoMode />
+        <NoumAIDashboard demoMode />
       </div>
 
       {/* Overlay: light blur + subtle dim + gradient fade at bottom */}

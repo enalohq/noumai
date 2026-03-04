@@ -50,7 +50,7 @@ export const tabMeta: Record<TabKey, { title: string; tooltip: string; details: 
       "See which domains and URLs get cited most in AI responses. Group by domain to find citation hubs, or search by URL for specific sources. Export data as CSV.",
   },
   "Citation Opportunities": {
-    title: "Citation Opps",
+    title: "Citation Opportunities",
     tooltip: "Competitor-cited sources where you're not mentioned.",
     details:
       "Discover high-value outreach targets: URLs where AI models cite your competitors but don't mention your brand. Each opportunity includes an outreach brief.",

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { SovereignDashboard } from "@/components/sovereign-dashboard";
+import { NoumAIDashboard } from "@/components/noumai-dashboard";
 
 const isDemoOnly =
   (process.env.NEXT_PUBLIC_DEMO_ONLY ?? "").trim().toLowerCase() === "true";
@@ -64,7 +64,7 @@ export default function Home() {
   if (isDemoOnly || (session && ready)) {
     return (
       <ErrorBoundary>
-        <SovereignDashboard demoMode={isDemoOnly} />
+        <NoumAIDashboard demoMode={isDemoOnly} />
       </ErrorBoundary>
     );
   }
