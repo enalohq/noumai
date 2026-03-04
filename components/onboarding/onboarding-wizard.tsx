@@ -115,6 +115,17 @@ export function OnboardingWizard() {
     }
   };
 
+  // Helper to get step data
+  const getStepData = (step: number) => {
+    switch (step) {
+      case 1: return state.brand;
+      case 2: return state.market;
+      case 3: return state.competitors;
+      case 4: return { prompts: state.prompts.selectedPrompts };
+      default: return {};
+    }
+  };
+
   const handleNext = async () => {
     setError("");
     try {
@@ -132,17 +143,23 @@ export function OnboardingWizard() {
           return;
         }
         await saveStep(2, state.market);
+        showToast("Step 2 completed! Moving to competitor tracking.", "success");
         setCurrentStep(3);
       } else if (currentStep === 3) {
         await saveStep(3, state.competitors);
+        showToast("Step 3 completed! Moving to prompt selection.", "success");
         setCurrentStep(4);
       } else if (currentStep === 4) {
         await saveStep(4, { prompts: state.prompts.selectedPrompts });
+        showToast("Onboarding complete! Welcome to NoumAI.", "success", 4000);
         updateSession().catch(() => {});
-        router.push("/");
+        setTimeout(() => {
+          router.push("/");
+        }, 1000);
       }
     } catch {
       setError("Something went wrong. Please try again.");
+      showToast("Failed to save step", "error");
     }
   };
 
@@ -158,10 +175,14 @@ export function OnboardingWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ skip: true }),
       });
+      showToast("Skipped onboarding. You can complete it later in settings.", "info", 4000);
       updateSession().catch(() => {});
-      router.push("/");
+      setTimeout(() => {
+        router.push("/");
+      }, 1000);
     } catch {
       setError("Something went wrong.");
+      showToast("Failed to skip onboarding", "error");
     } finally {
       setSaving(false);
     }
@@ -178,12 +199,14 @@ export function OnboardingWizard() {
   const currentStepMeta = STEPS[currentStep - 1];
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-th-bg px-4">
-      {/* Centered container — 80vw wide, 75vh tall */}
-      <div
-        className="flex w-full max-w-[80vw] overflow-hidden rounded-2xl border border-th-border bg-th-card shadow-2xl"
-        style={{ height: "75vh", minHeight: "520px" }}
-      >
+    <>
+      <ToastContainer />
+      <div className="flex min-h-screen items-center justify-center bg-th-bg px-4">
+        {/* Centered container — 80vw wide, 75vh tall */}
+        <div
+          className="flex w-full max-w-[80vw] overflow-hidden rounded-2xl border border-th-border bg-th-card shadow-2xl"
+          style={{ height: "75vh", minHeight: "520px" }}
+        >
         {/* Left panel — inputs */}
         <div className="flex w-[420px] shrink-0 flex-col border-r border-th-border">
           {/* Header */}
@@ -318,5 +341,6 @@ export function OnboardingWizard() {
         </div>
       </div>
     </div>
+    </>
   );
 }
