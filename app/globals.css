@@ -236,3 +236,54 @@ body {
   border-color: var(--th-accent);
   box-shadow: 0 0 0 3px var(--th-ring);
 }
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes checkmark {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-checkmark {
+  animation: checkmark 0.5s ease-out;
+}
+
+/* Form input styles */
+.bd-input {
+  border: 1px solid var(--th-border);
+  background-color: var(--th-card);
+  color: var(--th-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bd-input:focus {
+  outline: none;
+  border-color: var(--th-accent);
+  box-shadow: 0 0 0 3px var(--th-ring);
+}
+
+.bd-input:hover:not(:focus) {
+  border-color: var(--th-border-dark);
+}

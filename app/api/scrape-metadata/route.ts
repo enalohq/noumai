@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createDefaultBrandNameProviderChain,
+  BrandNameProviderChain,
+} from "@/lib/brand/brand-name-providers";
+import {
+  extractTwitterHandle,
+  extractLinkedinUrl,
+} from "@/lib/brand/social-handle-extractor";
 
-const SOCIAL_DOMAINS: Record<string, string[]> = {
-  instagram: ["instagram.com"],
-  twitter: ["twitter.com", "x.com"],
-  facebook: ["facebook.com"],
-  linkedin: ["linkedin.com"],
-  youtube: ["youtube.com"],
-  tiktok: ["tiktok.com"],
-  pinterest: ["pinterest.com"],
-};
+// Lazy initialization of provider chain
+let brandNameProviderChain: BrandNameProviderChain | null = null;
+
+function getBrandNameProviderChain(): BrandNameProviderChain {
+  if (!brandNameProviderChain) {
+    brandNameProviderChain = createDefaultBrandNameProviderChain();
+  }
+  return brandNameProviderChain;
+}
 
 /**
  * Normalize URL - add protocol and handle www
  */
 function normalizeUrl(url: string): string {
+  if (url.startsWith("//")) {
+    return `https:${url}`;
+  }
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
     return `https://${url}`;
   }
@@ -21,146 +32,62 @@ function normalizeUrl(url: string): string {
 }
 
 /**
- * Extract handle from social URL - handles various formats
+ * Decode HTML entities
  */
-function extractHandle(url: string, domains: string[]): string | null {
-  try {
-    const urlObj = new URL(normalizeUrl(url));
-    const hostname = urlObj.hostname.toLowerCase();
-    const pathParts = urlObj.pathname.split("/").filter(Boolean);
-    
-    // Check if hostname matches any domain (including www)
-    const matchingDomain = domains.find(
-      (d) => hostname === d || hostname === `www.${d}`
-    );
-    
-    if (!matchingDomain) return null;
-    
-    // Skip common non-handle paths
-    const skipPaths = ["hashtag", "search", "intent", "share", "share", "about", "help", "blog", "press"];
-    if (pathParts.length > 0 && skipPaths.includes(pathParts[0].toLowerCase())) {
-      return null;
-    }
-    
-    // LinkedIn: usually /company/brand-name or /in/username
-    if (matchingDomain.includes("linkedin")) {
-      if (pathParts[0] === "company" && pathParts[1]) {
-        return pathParts[1];
-      }
-      if (pathParts[0] === "in" && pathParts[1]) {
-        return pathParts[1];
-      }
-      return null;
-    }
-    
-    // Twitter/X: /handle or /handle/ or /@handle
-    if (pathParts.length >= 1) {
-      // Remove @ prefix if present, then clean the handle
-      const rawHandle = pathParts[0].startsWith('@') ? pathParts[0].substring(1) : pathParts[0];
-      const handle = rawHandle.replace(/[^a-zA-Z0-9_]/g, "");
-      if (handle && handle.length > 1) {
-        // Twitter handles are case-insensitive, return lowercase for consistency
-        return handle.toLowerCase();
-      }
-    }
-    
-    return null;
-  } catch {
-    return null;
+function decodeHtmlEntities(text: string): string {
+  const entities: { [key: string]: string } = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&#8211;': '–',  // en-dash
+    '&#8212;': '—',  // em-dash
+    '&#8217;': "'",  // right single quotation mark
+    '&#8220;': '"',  // left double quotation mark
+    '&#8221;': '"',  // right double quotation mark
+    '&ndash;': '–',
+    '&mdash;': '—',
+    '&rsquo;': "'",
+    '&ldquo;': '"',
+    '&rdquo;': '"',
+  };
+  
+  let decoded = text;
+  for (const [entity, char] of Object.entries(entities)) {
+    decoded = decoded.replace(new RegExp(entity, 'g'), char);
   }
+  
+  // Handle numeric entities like &#123;
+  decoded = decoded.replace(/&#(\d+);/g, (match, code) => {
+    return String.fromCharCode(parseInt(code, 10));
+  });
+  
+  // Handle hex entities like &#x1F;
+  decoded = decoded.replace(/&#x([0-9a-f]+);/gi, (match, code) => {
+    return String.fromCharCode(parseInt(code, 16));
+  });
+  
+  return decoded;
 }
 
 /**
- * Extract social handles from anchor tags
+ * Clean brand name by removing common separators and descriptors
  */
-function extractSocialHandles(html: string): { twitter?: string; linkedin?: string } {
-  const result: { twitter?: string; linkedin?: string } = {};
+function cleanBrandName(text: string): string | null {
+  if (!text) return null;
   
-  // Match all anchor tags - handle both single-line and multi-line HTML
-  const linkRegex = /<a\s+[^>]*href=(["'])([^"']*)\1[^>]*>/gi;
-  let match;
+  // Decode HTML entities
+  const decoded = decodeHtmlEntities(text);
   
-  while ((match = linkRegex.exec(html)) !== null) {
-    const href = match[2];
-    
-    for (const [platform, domains] of Object.entries(SOCIAL_DOMAINS)) {
-      if ((platform === "twitter" && result.twitter) || (platform === "linkedin" && result.linkedin)) {
-        continue;
-      }
-      
-      const matchingDomain = domains.find(
-        (d) => href.toLowerCase().includes(d) || href.toLowerCase().includes(`www.${d}`)
-      );
-      
-      if (matchingDomain) {
-        const handle = extractHandle(href, domains);
-        if (handle) {
-          if (platform === "twitter") {
-            result.twitter = handle;
-          } else if (platform === "linkedin") {
-            result.linkedin = handle;
-          }
-        }
-      }
-    }
-  }
+  // Remove common separators and everything after them
+  const cleaned = decoded
+    .replace(/\s*[\|\-–—]\s*.*$/i, '')  // Remove | - – — and everything after
+    .replace(/\s*::\s*.*$/i, '')         // Remove :: and everything after
+    .replace(/\s*[-–—]\s*(bulk|manufacturer|distributor|supplier|wholesale|retail|store|shop|online|india|usa|uk|co\.?m?|org|net|io).*$/i, '') // Remove common business descriptors
+    .trim();
   
-  return result;
-}
-
-/**
- * Extract social handles from JSON-LD structured data
- */
-function extractFromStructuredData(html: string): { twitter?: string; linkedin?: string } {
-  const result: { twitter?: string; linkedin?: string } = {};
-  
-  // Match application/ld+json scripts
-  const jsonLdRegex = /<script\s+[^>]*type=(["'])application\/ld\+json\1[^>]*>([\s\S]*?)<\/script>/gi;
-  let match;
-  
-  while ((match = jsonLdRegex.exec(html)) !== null) {
-    try {
-      const jsonContent = match[2];
-      const json = JSON.parse(jsonContent);
-      
-      // Handle both single object and array
-      const items = Array.isArray(json) ? json : [json];
-      
-      for (const item of items) {
-        const sameAs = item.sameAs;
-        if (Array.isArray(sameAs)) {
-          for (const url of sameAs) {
-            if (typeof url !== "string") continue;
-            
-            for (const [platform, domains] of Object.entries(SOCIAL_DOMAINS)) {
-              if ((platform === "twitter" && result.twitter) || (platform === "linkedin" && result.linkedin)) {
-                continue;
-              }
-              
-              const matchingDomain = domains.find(
-                (d) => url.toLowerCase().includes(d) || url.toLowerCase().includes(`www.${d}`)
-              );
-              
-              if (matchingDomain) {
-                const handle = extractHandle(url, domains);
-                if (handle) {
-                  if (platform === "twitter") {
-                    result.twitter = handle;
-                  } else if (platform === "linkedin") {
-                    result.linkedin = handle;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Invalid JSON, skip this script
-    }
-  }
-  
-  return result;
+  return cleaned && cleaned.length >= 2 ? cleaned : null;
 }
 
 /**
@@ -168,82 +95,190 @@ function extractFromStructuredData(html: string): { twitter?: string; linkedin?:
  */
 function extractMeta(html: string, selectors: string[]): string | null {
   for (const selector of selectors) {
-    // Pattern 1: property="og:title" content="..."
-    const pattern1 = new RegExp(
-      `<meta\\s+[^>]*property=["']${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']*)["']`,
-      "i"
-    );
-    const match1 = html.match(pattern1);
-    if (match1 && match1[1]?.trim()) {
-      return match1[1].trim();
-    }
+    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     
-    // Pattern 2: name="twitter:site" content="..."
-    const pattern2 = new RegExp(
-      `<meta\\s+[^>]*name=["']${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']*)["']`,
-      "i"
-    );
-    const match2 = html.match(pattern2);
-    if (match2 && match2[1]?.trim()) {
-      return match2[1].trim();
-    }
-    
-    // Pattern 3: content first, then property/name (unusual but exists)
-    const pattern3 = new RegExp(
-      `<meta\\s+[^>]*content=["']([^"']*)["'][^>]*property=["']${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`,
-      "i"
-    );
-    const match3 = html.match(pattern3);
-    if (match3 && match3[1]?.trim()) {
-      return match3[1].trim();
+    const patterns = [
+      `<meta\\s+[^>]*property=["']${escapedSelector}["'][^>]*content=["']([^"']*)["']`,
+      `<meta\\s+[^>]*name=["']${escapedSelector}["'][^>]*content=["']([^"']*)["']`,
+      `<meta\\s+[^>]*content=["']([^"']*)["'][^>]*property=["']${escapedSelector}["']`,
+    ];
+
+    for (const pattern of patterns) {
+      const match = html.match(new RegExp(pattern, 'i'));
+      if (match && match[1]?.trim()) {
+        return match[1].trim();
+      }
     }
   }
   return null;
 }
 
 /**
- * Clean and extract brand name from various sources
+ * Check if HTML content indicates bot detection
+ * Following SRP: Single responsibility for bot detection checking
  */
-function extractBrandName(html: string): string | null {
-  // Try og:site_name first (most reliable)
-  const ogSiteName = extractMeta(html, ["og:site_name"]);
-  if (ogSiteName && ogSiteName.length >= 2) {
-    return ogSiteName;
+function isBotBlockedContent(html: string): boolean {
+  const botIndicators = [
+    'javascript is disabled',
+    'please enable javascript',
+    'enable javascript and cookies',
+    'access denied',
+    'bot detected',
+    'cloudflare',
+    'distil networks',
+    'imperva',
+    'incapsula',
+    'akamai',
+    'datadome',
+    'human verification',
+    'captcha',
+    'security check',
+    'rate limit',
+    'too many requests',
+    'access to this page has been denied',
+    'you are being rate limited',
+    'please verify you are a human',
+    'security check is required',
+    'amazon security check'
+  ];
+
+  const lowerHtml = html.toLowerCase();
+  
+  // Check for Amazon-specific bot detection
+  if (html.includes('amazon') && html.includes('javascript is disabled')) {
+    return true;
   }
   
-  // Try og:title
-  const ogTitle = extractMeta(html, ["og:title"]);
-  if (ogTitle) {
-    // Clean up common title patterns
-    const cleaned = ogTitle
-      .replace(/\s*[\|\-–—]\s*.*$/, "") // Remove " | Brand" or " - Brand"
-      .replace(/\s*::\s*.*$/, "") // Remove " :: Brand"
-      .trim();
-    if (cleaned.length >= 2) {
-      return cleaned;
+  // Check for any bot indicators
+  return botIndicators.some(indicator => 
+    lowerHtml.includes(indicator.toLowerCase())
+  );
+}
+
+/**
+ * Alternative fetch with different headers for bot-protected sites
+ * Includes user-agent rotation and retry logic
+ * Following SOLID principles:
+ * - SRP: Single responsibility for fetching with alternative headers
+ * - OCP: Can be extended with new header configurations without modification
+ */
+async function fetchWithAlternativeHeaders(url: string): Promise<Response | null> {
+  // Enhanced user agents with more diversity
+  const userAgents = [
+    // Chrome on various platforms
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    
+    // Firefox
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:123.0) Gecko/20100101 Firefox/123.0",
+    
+    // Safari
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+    
+    // Edge
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+    
+    // Mobile - Amazon often treats mobile traffic differently
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
+  ];
+
+  // Different header configurations to try
+  const headerConfigs = [
+    // Standard browser headers
+    {
+      "User-Agent": userAgents[0],
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Connection": "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "cross-site",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+    },
+    // Mobile browser headers (often bypasses bot detection)
+    {
+      "User-Agent": userAgents[7], // Mobile user agent
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Connection": "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
+    },
+    // Minimal headers (some sites block complex headers)
+    {
+      "User-Agent": userAgents[1],
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    },
+    // Amazon-specific headers (mimics real browser traffic to Amazon)
+    {
+      "User-Agent": userAgents[0],
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Accept-Charset": "utf-8",
+      "Connection": "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Sec-Fetch-User": "?1",
+      "Cache-Control": "max-age=0",
+      "Referer": "https://www.google.com/",
+    }
+  ];
+
+  // Try each header configuration with retries
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const headers = headerConfigs[attempt % headerConfigs.length];
+    
+    // Add small delay between attempts to mimic human behavior
+    if (attempt > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+
+    try {
+      const response = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(20000),
+      });
+
+      // Check if response is successful
+      if (response.ok) {
+        const html = await response.text();
+        
+        // Check if content indicates bot blocking
+        if (!isBotBlockedContent(html)) {
+          return response;
+        }
+        
+        // If bot blocked, try next configuration
+        console.log(`Bot detection on attempt ${attempt + 1} for ${url}`);
+      }
+    } catch (error) {
+      // Continue to next attempt
+      if (attempt === 3) {
+        console.log(`All fetch attempts failed for ${url}:`, error);
+      }
     }
   }
-  
-  // Fallback to <title> tag
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  if (titleMatch) {
-    const title = titleMatch[1].trim();
-    const cleaned = title
-      .replace(/\s*[\|\-–—]\s*.*$/, "")
-      .replace(/\s*::\s*.*$/, "")
-      .trim();
-    if (cleaned.length >= 2) {
-      return cleaned;
-    }
-    return title;
-  }
-  
+
   return null;
 }
+
+
+
 
 /**
  * GET /api/scrape-metadata — Fetches website metadata for brand auto-population.
- * Robustly handles various website formats and edge cases.
+ * Uses provider chain for brand name extraction (HTML → Brandfetch API → URL fallback)
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -253,7 +288,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "URL is required" }, { status: 400 });
   }
 
-  // Validate URL format
   let fetchUrl: URL;
   try {
     fetchUrl = new URL(normalizeUrl(url));
@@ -262,80 +296,76 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(fetchUrl.toString(), {
+    let response = await fetch(fetchUrl.toString(), {
       headers: {
-        "User-Agent": "NoumAI-Onboarding/1.0 (compatible; bot)",
-        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        Connection: "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
       },
-      signal: AbortSignal.timeout(15000), // 15s timeout for slower sites
+      signal: AbortSignal.timeout(15000),
     });
 
+    // If fetch fails, try with alternative headers
     if (!response.ok) {
-      return NextResponse.json(
-        { error: `Failed to fetch website (status: ${response.status})` },
-        { status: response.status }
-      );
+      response = await fetchWithAlternativeHeaders(fetchUrl.toString()) || response;
     }
 
-    const html = await response.text();
+    let brandName: string | null = null;
+    let html = "";
 
-    // Extract brand name
-    const brandName = extractBrandName(html);
+    if (response.ok) {
+      html = await response.text();
+      
+      // Try to extract brand name from HTML first
+      const ogSiteName = extractMeta(html, ["og:site_name"]);
+      if (ogSiteName && ogSiteName.length >= 2) {
+        brandName = cleanBrandName(ogSiteName);
+      } else {
+        const appName = extractMeta(html, ["application-name"]);
+        if (appName && appName.length >= 2) {
+          brandName = cleanBrandName(appName);
+        } else {
+          const ogTitle = extractMeta(html, ["og:title"]);
+          if (ogTitle) {
+            const cleaned = cleanBrandName(ogTitle);
+            if (cleaned && cleaned.length >= 2) {
+              brandName = cleaned;
+            }
+          }
+        }
+      }
+    }
 
-    // Extract from meta tags
-    const metaTwitterHandleRaw = extractMeta(html, ["twitter:site", "twitter:site:id"]);
-    const metaTwitterHandle = metaTwitterHandleRaw
-      ? metaTwitterHandleRaw
-          .replace(/^https?:\/\/(twitter|x)\.com\//i, "")
-          .replace(/^@/, "")
-          .replace(/^\//, "")
-          .trim()
-          .toLowerCase()
-      : undefined;
-
-    // Extract from anchor tags
-    const linkHandles = extractSocialHandles(html);
+    // Always use provider chain for all data (includes HTML scraping and Brandfetch API)
+    const providerData = await getBrandNameProviderChain().fetch(fetchUrl.toString());
     
-    // Extract from JSON-LD structured data
-    const structuredDataHandles = extractFromStructuredData(html);
-
-    // Check if meta tag handle looks like a valid Twitter handle
-    // Twitter handles can only contain letters, numbers, and underscores, 1-15 chars
-    const isValidTwitterHandle = (handle: string | undefined) => {
-      if (!handle) return false;
-      return /^[a-z0-9_]{1,15}$/.test(handle);
-    };
-
-    // Get handle from URL sources (structured data or anchor links)
-    const urlHandle = structuredDataHandles.twitter || linkHandles.twitter;
-
-    // Priority logic:
-    // 1. If meta tag is invalid, use URL handle
-    // 2. If meta tag is valid but URL handle exists and is different, prefer URL handle
-    //    (URL is an actual link, more reliable than meta tag)
-    // 3. Otherwise use meta tag
-    let twitterHandle: string | undefined;
-    if (!metaTwitterHandle || !isValidTwitterHandle(metaTwitterHandle)) {
-      twitterHandle = urlHandle;
-    } else if (urlHandle && urlHandle !== metaTwitterHandle) {
-      // Meta tag and URL handle are different, prefer URL (more reliable)
-      twitterHandle = urlHandle;
-    } else {
-      twitterHandle = metaTwitterHandle;
+    // Use provider chain for brandName if not found from HTML
+    if (!brandName) {
+      brandName = providerData.brandName;
     }
     
-    const linkedinHandle = structuredDataHandles.linkedin || 
-      linkHandles.linkedin;
+    // Use provider chain for social handles
+    const twitterHandle = providerData.twitterHandle;
+    const linkedinHandle = providerData.linkedinHandle;
 
     const metadata = {
-      brandName: brandName || undefined,
-      twitterHandle: twitterHandle || undefined,
-      linkedinHandle: linkedinHandle || undefined,
+      brandName: brandName || "",
+      twitterHandle: twitterHandle || "",
+      linkedinHandle: linkedinHandle || "",
       url: fetchUrl.toString(),
     };
 
     return NextResponse.json(metadata);
   } catch (error) {
+    console.error("Scrape metadata error:", error);
     if (error instanceof Error && error.name === "TimeoutError") {
       return NextResponse.json({ error: "Request timed out. The website may be slow." }, { status: 408 });
     }
