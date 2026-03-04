@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-
-export const runtime = "edge";
+import { callLlm } from "@/lib/server/llm-provider";
 
 const bodySchema = z.object({
   prompt: z.string().min(5),
@@ -14,10 +13,27 @@ const cache = new Map<string, { expiresAt: number; text: string }>();
 
 export async function POST(req: NextRequest) {
   try {
-    const parsed = bodySchema.parse(await req.json());
-    const cacheKey = JSON.stringify({ prompt: parsed.prompt, maxTokens: parsed.maxTokens, temperature: parsed.temperature });
+    // 1. Parse & validate input
+    let raw: unknown;
+    try {
+      raw = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
-    if (!parsed.skipCache) {
+    const parsed = bodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.format() },
+        { status: 400 },
+      );
+    }
+
+    const { prompt, maxTokens, temperature, skipCache } = parsed.data;
+
+    // 2. Check cache
+    const cacheKey = JSON.stringify({ prompt, maxTokens, temperature });
+    if (!skipCache) {
       const hit = cache.get(cacheKey);
       if (hit && hit.expiresAt > Date.now()) {
         return NextResponse.json({ text: hit.text, cached: true });
@@ -26,54 +42,22 @@ export async function POST(req: NextRequest) {
       cache.delete(cacheKey);
     }
 
-    const key = process.env.OPENROUTER_KEY;
-    if (!key) {
-      return NextResponse.json(
-        { error: "Missing OPENROUTER_KEY" },
-        { status: 400 },
-      );
-    }
+    // 3. Call LLM (Ollama primary → OpenRouter fallback)
+    const result = await callLlm({ prompt, maxTokens, temperature });
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "moonshotai/kimi-k2.5",
-        messages: [
-          {
-            role: "user",
-            content: parsed.prompt,
-          },
-        ],
-        max_tokens: parsed.maxTokens ?? 900,
-        temperature: parsed.temperature ?? 0.2,
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      return NextResponse.json(
-        { error: `OpenRouter request failed (${response.status}): ${text}` },
-        { status: 500 },
-      );
-    }
-
-    const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
-    const text = payload.choices?.[0]?.message?.content ?? "";
+    // 4. Cache for 30 minutes
     cache.set(cacheKey, {
-      text,
+      text: result.text,
       expiresAt: Date.now() + 1000 * 60 * 30,
     });
 
-    return NextResponse.json({ text, cached: false });
+    return NextResponse.json({
+      text: result.text,
+      cached: false,
+      llmProvider: result.provider,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
