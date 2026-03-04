@@ -58,15 +58,15 @@ export class HtmlScrapingProvider implements BrandNameProvider {
       }
 
       const html = await response.text();
-      return this.extractBrandData(html);
+      return this.extractBrandData(html, url);
     } catch {
       return { brandName: null, twitterHandle: null, linkedinHandle: null };
     }
   }
 
-  private extractBrandData(html: string): BrandData {
+  private extractBrandData(html: string, url?: string): BrandData {
     // Extract brand name
-    const brandName = this.extractBrandName(html);
+    const brandName = this.extractBrandName(html, url);
     
     // Try to extract social handles from JSON-LD structured data first
     const structuredData = extractSocialFromStructuredData(html);
@@ -84,14 +84,14 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     return { brandName, twitterHandle, linkedinHandle };
   }
 
-  private extractBrandName(html: string): string | null {
+  private extractBrandName(html: string, url?: string): string | null {
     // Try og:site_name first (most reliable)
     const ogSiteName = this.extractMeta(html, ['og:site_name']);
     if (ogSiteName && ogSiteName.length >= 2) {
       const cleaned = this.cleanBrandName(ogSiteName);
-      // If cleaned name is still too long, use NER
+      // If cleaned name is still too long, use NER with URL fallback
       if (cleaned && cleaned.length > 30) {
-        const nerName = this.extractOrganizationWithNER(ogSiteName);
+        const nerName = this.extractOrganizationWithNER(ogSiteName, url);
         if (nerName) {
           return nerName;
         }
@@ -110,9 +110,9 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     if (ogTitle) {
       const cleaned = this.cleanBrandName(ogTitle);
       if (cleaned && cleaned.length >= 2) {
-        // If cleaned name is still too long, use NER
+        // If cleaned name is still too long, use NER with URL fallback
         if (cleaned.length > 30) {
-          const nerName = this.extractOrganizationWithNER(ogTitle);
+          const nerName = this.extractOrganizationWithNER(ogTitle, url);
           if (nerName) {
             return nerName;
           }
@@ -127,9 +127,9 @@ export class HtmlScrapingProvider implements BrandNameProvider {
       const title = titleMatch[1].trim();
       const cleaned = this.cleanBrandName(title);
       if (cleaned) {
-        // If cleaned name is still too long, use NER
+        // If cleaned name is still too long, use NER with URL fallback
         if (cleaned.length > 30) {
-          const nerName = this.extractOrganizationWithNER(title);
+          const nerName = this.extractOrganizationWithNER(title, url);
           if (nerName) {
             return nerName;
           }
@@ -154,11 +154,11 @@ export class HtmlScrapingProvider implements BrandNameProvider {
   /**
    * Extract organization name using NER (Named Entity Recognition)
    * Uses compromise library for lightweight NER
+   * Falls back to URL hostname if NER doesn't find anything
    */
-  private extractOrganizationWithNER(text: string): string | null {
+  private extractOrganizationWithNER(text: string, url?: string): string | null {
     try {
-      // Dynamic import to avoid requiring the library if not installed
-      // Users can install with: npm install compromise
+      // Try NER first
       let doc;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -166,32 +166,51 @@ export class HtmlScrapingProvider implements BrandNameProvider {
         doc = compromise(text);
       } catch {
         // compromise not installed, skip NER
-        return null;
+        // Fall through to URL fallback
       }
       
-      // Extract organization entities
-      const organizations: string[] = doc.organizations().out('array');
-      
-      if (organizations.length > 0) {
-        // Return the first organization found
-        const orgName = organizations[0];
-        if (orgName && orgName.length >= 2 && orgName.length <= 30) {
-          return orgName;
+      if (doc) {
+        // Extract organization entities
+        const organizations: string[] = doc.organizations().out('array');
+        
+        if (organizations.length > 0) {
+          // Return the first organization found
+          const orgName = organizations[0];
+          if (orgName && orgName.length >= 2 && orgName.length <= 30) {
+            return orgName;
+          }
+        }
+        
+        // Try to find company suffixes in the text
+        const companySuffixes = /\b(Inc\.?|LLC|Ltd\.?|Corp\.?|Corporation|Company|Co\.?)\b/i;
+        const suffixMatch = text.match(companySuffixes);
+        if (suffixMatch) {
+          // Find the start of the company name (look backwards from suffix)
+          const suffixIndex = text.indexOf(suffixMatch[0]);
+          const beforeSuffix = text.substring(0, suffixIndex).trim();
+          // Get the last few words before the suffix
+          const words = beforeSuffix.split(/\s+/);
+          const companyName = words.slice(-3).join(' ') + ' ' + suffixMatch[0];
+          if (companyName.length <= 25) {
+            return companyName.trim();
+          }
         }
       }
       
-      // Try to find company suffixes in the text
-      const companySuffixes = /\b(Inc\.?|LLC|Ltd\.?|Corp\.?|Corporation|Company|Co\.?)\b/i;
-      const suffixMatch = text.match(companySuffixes);
-      if (suffixMatch) {
-        // Find the start of the company name (look backwards from suffix)
-        const suffixIndex = text.indexOf(suffixMatch[0]);
-        const beforeSuffix = text.substring(0, suffixIndex).trim();
-        // Get the last few words before the suffix
-        const words = beforeSuffix.split(/\s+/);
-        const companyName = words.slice(-3).join(' ') + ' ' + suffixMatch[0];
-        if (companyName.length <= 30) {
-          return companyName.trim();
+      // Fallback: Extract brand name from URL hostname
+      if (url) {
+        try {
+          const urlObj = new URL(url);
+          const hostname = urlObj.hostname.replace(/^www\./i, '');
+          const parts = hostname.split('.');
+          const mainPart = parts[0];
+          // Convert to title case
+          const brandName = mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
+          if (brandName.length >= 2 && brandName.length <= 25) {
+            return brandName;
+          }
+        } catch {
+          // Invalid URL, skip
         }
       }
       
