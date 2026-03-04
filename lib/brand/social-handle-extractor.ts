@@ -24,12 +24,34 @@ const TWITTER_PATTERNS = [
       return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
     }
   },
+  // twitter:site content with @ symbol
+  {
+    type: 'meta',
+    selector: 'twitter:site',
+    extract: (value: string) => {
+      const cleaned = value
+        .replace(/^@/, '')
+        .trim()
+        .toLowerCase();
+      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+    }
+  },
   // Anchor tags with Twitter URLs (twitter.com and x.com)
   {
     type: 'link',
     pattern: /<a\s+[^>]*href=["'](https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[@]?([^"'\/\s]+))["'][^>]*>/gi,
     extract: (match: RegExpExecArray) => {
       const handle = (match[1] || match[0]).toLowerCase();
+      const cleaned = handle.replace(/^@/, '').split(/[\s#?]/)[0];
+      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+    }
+  },
+  // Anchor tags with rel="me" and Twitter URL
+  {
+    type: 'link',
+    pattern: /<a\s+[^>]*rel=["']me["'][^>]*href=["']([^"']*(?:twitter|x)\.com\/[@]?([^"'\/\s]+))["'][^>]*>/gi,
+    extract: (match: RegExpExecArray) => {
+      const handle = (match[2] || match[1]).toLowerCase();
       const cleaned = handle.replace(/^@/, '').split(/[\s#?]/)[0];
       return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
     }
@@ -58,6 +80,24 @@ const TWITTER_PATTERNS = [
     pattern: /(?:twitter|x)\.com\/[@]?([a-z0-9_]+)/gi,
     extract: (match: RegExpExecArray) => {
       const cleaned = match[1].toLowerCase();
+      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+    }
+  },
+  // Amazon-specific: Follow us on Twitter text links
+  {
+    type: 'text',
+    pattern: /follow\s+us?\s+(?:on\s+)?(?:twitter|x)\s*[@]?([a-z0-9_]+)/gi,
+    extract: (match: RegExpExecArray) => {
+      const cleaned = match[1].toLowerCase();
+      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+    }
+  },
+  // Amazon-specific: Twitter handle in social links section
+  {
+    type: 'link',
+    pattern: /<a[^>]*href=["'][^"']*(?:twitter|x)\.com\/([^"'\/\s@]+)["'][^>]*>(?:[^<]*twitter[^<]*|<[^>]*>)/gi,
+    extract: (match: RegExpExecArray) => {
+      const cleaned = match[1].toLowerCase().replace(/^@/, '').split(/[\s#?]/)[0];
       return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
     }
   },

@@ -140,6 +140,26 @@ export class HtmlScrapingProvider implements BrandNameProvider {
       .replace(/\s*[-–—]\s*(bulk|manufacturer|distributor|supplier|wholesale|retail|store|shop|online|india|usa|uk|co\.?m?|org|net|io).*$/i, '') // Remove common business descriptors
       .trim();
     
+    // Enforce max length (30 characters as per requirement)
+    const maxLength = 30;
+    if (cleaned.length > maxLength) {
+      // Try to truncate at a word boundary
+      const truncated = cleaned.substring(0, maxLength);
+      const lastSpace = truncated.lastIndexOf(' ');
+      const lastDash = truncated.lastIndexOf('-');
+      const lastUnderscore = truncated.lastIndexOf('_');
+      
+      // Find the best boundary (prefer spaces, then dashes, then underscores)
+      const bestBoundary = Math.max(lastSpace, lastDash, lastUnderscore);
+      
+      if (bestBoundary > 5) {  // Ensure we keep at least 5 characters
+        return cleaned.substring(0, bestBoundary).trim();
+      }
+      
+      // If no good boundary found, just truncate
+      return truncated.trim();
+    }
+    
     return cleaned && cleaned.length >= 2 ? cleaned : null;
   }
 
