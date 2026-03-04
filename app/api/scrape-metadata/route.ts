@@ -246,7 +246,7 @@ async function fetchWithAlternativeHeaders(url: string): Promise<Response | null
 
     try {
       const response = await fetch(url, {
-        headers,
+        headers: headers as any,
         signal: AbortSignal.timeout(20000),
       });
 

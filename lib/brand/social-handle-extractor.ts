@@ -121,18 +121,20 @@ export function extractTwitterHandle(html: string): string | null {
     'i'
   ));
   if (metaMatch && metaMatch[1]) {
-    const result = metaPattern.extract(metaMatch[1]);
+    const result = (metaPattern.extract as (v: string) => string | null)(metaMatch[1]);
     if (result) return result;
   }
 
   // Try all regex patterns
   for (let i = 1; i < TWITTER_PATTERNS.length; i++) {
-    const pattern = TWITTER_PATTERNS[i];
+    const pattern = TWITTER_PATTERNS[i] as any;
+    if (!pattern.pattern) continue;
+    
     const regex = new RegExp(pattern.pattern.source, pattern.pattern.flags);
     let match: RegExpExecArray | null;
     
     while ((match = regex.exec(html)) !== null) {
-      const result = pattern.extract(match);
+      const result = (pattern.extract as (m: RegExpExecArray) => string | null)(match);
       if (result) return result;
     }
   }
@@ -144,7 +146,9 @@ export function extractTwitterHandle(html: string): string | null {
  * Extract LinkedIn URL from HTML
  */
 export function extractLinkedinUrl(html: string): string | null {
-  for (const pattern of LINKEDIN_PATTERNS) {
+  for (const pattern of LINKEDIN_PATTERNS as any[]) {
+    if (!pattern.pattern) continue;
+    
     const regex = new RegExp(pattern.pattern.source, pattern.pattern.flags);
     let match: RegExpExecArray | null;
     
