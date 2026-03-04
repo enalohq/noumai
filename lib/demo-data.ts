@@ -360,7 +360,6 @@ export const DEMO_STATE: AppState = {
   competitors: "profound.com, peec.ai, otterly.ai",
   battlecards: demoBattlecards,
   runs: generateRuns(),
-  auditUrl: "https://geoaeotracker.com",
   auditReport: demoAuditReport,
   scheduleEnabled: true,
   scheduleIntervalMs: 21600000,

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
 const inter = Inter({
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 /** Inline script to apply theme before first paint — prevents flash */
-const themeScript = `(function(){try{var t=localStorage.getItem('sovereign-theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`;
+const themeScript = `(function(){try{var t=sessionStorage.getItem('sovereign-theme');if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`;
 
 export default function RootLayout({
   children,
@@ -36,7 +37,9 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {children}
+        <SessionProvider>
+          {children}
+        </SessionProvider>
       </body>
     </html>
   );

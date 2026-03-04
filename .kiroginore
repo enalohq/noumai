@@ -43,7 +43,3 @@ next-env.d.ts
 
 # project spec (not part of the app)
 guidelines.md
-
-# database
-*.db
-*.db-journal

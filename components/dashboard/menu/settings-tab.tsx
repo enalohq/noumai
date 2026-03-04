@@ -1,12 +1,12 @@
 import type { BrandConfig } from "@/components/dashboard/types";
 
-type ProjectSettingsTabProps = {
+type SettingsTabProps = {
   brand: BrandConfig;
   onBrandChange: (patch: Partial<BrandConfig>) => void;
   onReset?: () => void;
 };
 
-export function ProjectSettingsTab({ brand, onBrandChange, onReset }: ProjectSettingsTabProps) {
+export function SettingsTab({ brand, onBrandChange, onReset }: SettingsTabProps) {
   return (
     <div className="space-y-5">
       <div>
@@ -78,19 +78,6 @@ export function ProjectSettingsTab({ brand, onBrandChange, onReset }: ProjectSet
         />
       </div>
 
-      {/* Danger zone */}
-      {onReset && (
-        <div className="rounded-lg border border-th-danger/30 bg-th-danger-soft p-4">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-th-danger">Danger Zone</div>
-          <p className="mb-3 text-sm text-th-danger/70">Delete all saved data including runs, prompts, settings, and audit results. This cannot be undone.</p>
-          <button
-            onClick={onReset}
-            className="rounded-lg border border-th-danger/40 bg-th-danger-soft px-4 py-2 text-sm font-medium text-th-danger hover:bg-th-danger/20"
-          >
-            Reset All Data
-          </button>
-        </div>
-      )}
     </div>
   );
 }

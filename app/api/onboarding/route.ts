@@ -1,0 +1,237 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { generateStarterPrompts } from "@/lib/onboarding/generate-prompts";
+
+/**
+ * GET /api/onboarding — Onboarding always uses primary workspace.
+ * X-Workspace-Id / workspaceId query are accepted for consistency but ignored for scoping.
+ */
+export async function GET() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      onboardingCompleted: true,
+      onboardingStep: true,
+      workspaces: {
+        take: 1,
+        orderBy: { createdAt: "asc" },
+        select: {
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              brandName: true,
+              brandAliases: true,
+              website: true,
+              industry: true,
+              brandDescription: true,
+              targetKeywords: true,
+              starterPrompts: true,
+              competitors: {
+                select: { id: true, name: true, url: true, type: true },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspace = user.workspaces[0]?.workspace ?? null;
+
+  // Generate suggested prompts from brand context (pure function, no extra DB cost)
+  const suggestedPrompts = workspace?.brandName
+    ? generateStarterPrompts({
+        brandName: workspace.brandName ?? "",
+        website: workspace.website ?? undefined,
+        industry: workspace.industry ?? undefined,
+        description: workspace.brandDescription ?? undefined,
+        keywords: workspace.targetKeywords ?? undefined,
+        competitors: workspace.competitors,
+      })
+    : [];
+
+  // Parse saved starter prompts (user's confirmed selection from step 4)
+  let savedStarterPrompts: string[] = [];
+  if (workspace?.starterPrompts) {
+    try {
+      savedStarterPrompts = JSON.parse(workspace.starterPrompts);
+    } catch {
+      savedStarterPrompts = [];
+    }
+  }
+
+  return NextResponse.json({
+    onboardingCompleted: user.onboardingCompleted,
+    currentStep: user.onboardingStep,
+    suggestedPrompts,
+    savedStarterPrompts,
+    workspace: workspace
+      ? {
+          id: workspace.id,
+          brandName: workspace.brandName ?? "",
+          brandAliases: workspace.brandAliases ?? "",
+          website: workspace.website ?? "",
+          twitterHandle: workspace.twitterHandle ?? "",
+          linkedinHandle: workspace.linkedinHandle ?? "",
+          industry: workspace.industry ?? "",
+          brandDescription: workspace.brandDescription ?? "",
+          targetKeywords: workspace.targetKeywords ?? "",
+          competitors: workspace.competitors,
+        }
+      : null,
+  });
+}
+
+/**
+ * PATCH /api/onboarding — Onboarding always uses primary workspace.
+ * X-Workspace-Id / workspaceId query are accepted for consistency but ignored for scoping.
+ */
+export async function PATCH(request: NextRequest) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+  const body = await request.json();
+
+  // Resolve workspace once per request: onboarding always uses primary (do not read from body).
+  // Find the user's primary workspace — create one on the fly if missing
+  let membership = await prisma.workspaceMember.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { workspaceId: true },
+  });
+
+  if (!membership) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+    const newWorkspace = await prisma.workspace.create({
+      data: {
+        name: `${user?.name || user?.email || "My"}'s Workspace`,
+        description: "Default workspace",
+        members: { create: { userId, role: "owner" } },
+      },
+    });
+    membership = { workspaceId: newWorkspace.id };
+  }
+
+  const workspaceId = membership.workspaceId;
+
+  // Skip — mark onboarding complete from any step
+  if (body.skip === true) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { onboardingCompleted: true, onboardingStep: 4 },
+    });
+    return NextResponse.json({ success: true, onboardingCompleted: true });
+  }
+
+  const { step } = body;
+
+  if (step === 1) {
+    const { brandName, brandAliases, website, twitterHandle, linkedinHandle } = body;
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        brandName: brandName ?? undefined,
+        brandAliases: brandAliases ?? undefined,
+        website: website ?? undefined,
+        twitterHandle: twitterHandle ?? undefined,
+        linkedinHandle: linkedinHandle ?? undefined,
+      },
+    });
+    await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 1 } });
+
+  } else if (step === 2) {
+    const { industry, brandDescription } = body;
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        industry: industry ?? undefined,
+        brandDescription: brandDescription ?? undefined,
+      },
+    });
+    await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 2 } });
+
+  } else if (step === 3) {
+    const { targetKeywords, competitors } = body;
+    await prisma.$transaction([
+      prisma.competitor.deleteMany({ where: { workspaceId } }),
+      ...(Array.isArray(competitors)
+        ? competitors
+            .filter((c: { name?: string }) => c.name?.trim())
+            .map((c: { name: string; url?: string; type?: string }) =>
+              prisma.competitor.create({
+                data: {
+                  workspaceId,
+                  name: c.name.trim(),
+                  url: c.url?.trim() || null,
+                  type: c.type ?? "direct",
+                },
+              })
+            )
+        : []),
+      prisma.workspace.update({
+        where: { id: workspaceId },
+        data: { targetKeywords: targetKeywords ?? undefined },
+      }),
+      // Step 3 no longer completes onboarding — step 4 (prompts) does
+      prisma.user.update({ where: { id: userId }, data: { onboardingStep: 3 } }),
+    ]);
+
+  } else if (step === 4) {
+    const { prompts } = body;
+    const validPrompts = Array.isArray(prompts)
+      ? prompts.filter((p: unknown) => typeof p === "string" && (p as string).trim())
+      : [];
+    const promptsJson = JSON.stringify(validPrompts);
+
+    // Save starterPrompts JSON (backward compat) and mark onboarding complete
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { starterPrompts: promptsJson },
+    });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { onboardingCompleted: true, onboardingStep: 4 },
+    });
+
+    // Also create TrackedPrompt rows (skip duplicates by checking existing text)
+    if (validPrompts.length > 0) {
+      const existingPrompts = await prisma.trackedPrompt.findMany({
+        where: { workspaceId, deletedAt: null },
+        select: { text: true },
+      });
+      const existingTexts = new Set(existingPrompts.map((p: { text: string }) => p.text));
+      for (const text of validPrompts) {
+        const trimmed = (text as string).trim();
+        if (trimmed && !existingTexts.has(trimmed)) {
+          await prisma.trackedPrompt.create({
+            data: { workspaceId, text: trimmed },
+          });
+        }
+      }
+    }
+
+  } else {
+    return NextResponse.json({ error: "Invalid step" }, { status: 400 });
+  }
+
+  return NextResponse.json({ success: true });
+}

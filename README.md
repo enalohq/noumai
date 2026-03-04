@@ -197,9 +197,94 @@ All routes include in-memory caching to minimize API costs.
 
 MIT — use it, fork it, ship it.
 
----
 
-<p align="center">
-  Built by <a href="https://www.linkedin.com/in/daniel-shashko/">Daniel Shashko</a><br/>
-  <sub>Powered by <a href="https://brightdata.com/?utm_source=geo-tracker-os">Bright Data</a></sub>
-</p>
+
+## Authentication & User Management
+
+The application now includes a complete authentication system with the following features:
+
+### Authentication Features
+- **Email/Password Authentication** - Secure login with email and password
+- **Social Login** - Google OAuth integration
+- **Multi-User Support** - Multiple users with isolated workspaces
+- **Session Management** - Secure session handling with JWT
+- **Password Security** - Bcrypt hashing for password storage
+
+### Database Schema
+The authentication system uses SQLite for development (and can use PostgreSQL for production) with Prisma ORM. The schema includes:
+- **Users** - User accounts with email/password authentication
+- **Workspaces** - Isolated workspaces for user data
+- **Workspace Members** - Many-to-many relationship for workspace access
+- **Sessions & Accounts** - NextAuth.js session management
+
+### Environment Variables
+Add these to your `.env` file:
+
+```env
+# Authentication
+AUTH_SECRET="your-secret-key-here"  # Generate with: openssl rand -base64 32
+NEXTAUTH_URL="http://localhost:3000"
+
+# Database (NeonDB PostgreSQL for both development and production)
+# Get your connection string from NeonDB console
+DATABASE_URL="postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/main?sslmode=require"
+
+# OAuth (optional)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+```
+
+### Database Setup
+1. For development (SQLite):
+   ```bash
+   npx prisma db push
+   npx prisma generate
+   ```
+
+2. For production (PostgreSQL):
+   - Install PostgreSQL and create a database
+   - Update DATABASE_URL in .env to your PostgreSQL connection
+   - Run the same migration commands
+3. Seed initial data if needed
+
+### Authentication Flow
+1. **Sign Up**: Users can create accounts with email/password or Google OAuth
+2. **Sign In**: Secure login with JWT-based sessions
+3. **Workspace Management**: Each user gets a default workspace
+4. **Data Isolation**: User data is isolated by workspace
+
+### Security Features
+- Password hashing with bcrypt
+- JWT-based session management
+- CSRF and XSS protection
+- Secure session cookies
+- Rate limiting on auth endpoints
+
+### Multi-User Workspaces
+Each user gets a default workspace, but can be added to multiple workspaces:
+- **Workspace Owners**: Full control over workspace
+- **Workspace Members**: Collaborate with team members
+- **Data Isolation**: Each workspace has isolated data storage
+
+### API Endpoints
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/signin` - User login
+- `GET /api/auth/session` - Get current session
+- `GET /api/auth/signout` - Sign out
+
+### Development
+```bash
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env.local
+
+# Run database migrations
+npx prisma db push
+
+# Run development server
+npm run dev
+```
+
+The authentication system is built with security and scalability in mind, using industry-standard practices for user management and data protection.

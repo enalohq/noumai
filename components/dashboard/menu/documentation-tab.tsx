@@ -15,25 +15,23 @@ const sections: DocSection[] = [
     title: "Overview",
     icon: "📖",
     content: [
-      "The GEO/AEO Tracker is a local-first, open-source intelligence dashboard that monitors how your brand appears across AI models — ChatGPT, Perplexity, Gemini, Copilot, Google AI, and Grok.",
-      "All data is stored in your browser (localStorage + IndexedDB). Nothing leaves your machine unless you explicitly trigger a scrape or analysis via the configured API.",
+      "The GEO/AEO Tracker is a local-first, open-source intelligence dashboard that monitors how your brand appears across AI models - ChatGPT, Perplexity, Gemini, Copilot, Google AI, and Grok.",
       "Key capabilities: multi-model brand tracking, visibility scoring, sentiment analysis, citation discovery, competitor battlecards, AEO site audits, and automation templates.",
     ],
   },
   {
     id: "project-settings",
-    title: "Project Settings",
+    title: "Settings",
     icon: "⚙️",
     content: [
       "Configure your brand identity: name, aliases, website URL, industry, target keywords, and a short description.",
       "This context is injected into every AI prompt so that analysis stays relevant to your business.",
       "Brand aliases let you track abbreviations or informal names (e.g., 'BD' for 'Bright Data').",
-      "You can reset all data from this tab if you need a clean slate.",
     ],
   },
   {
     id: "prompt-hub",
-    title: "Prompt Hub",
+    title: "Prompts",
     icon: "💬",
     content: [
       "Build a library of tracking prompts. Use {brand} as a placeholder — it will be replaced with your brand name at runtime.",
@@ -55,12 +53,12 @@ const sections: DocSection[] = [
   },
   {
     id: "niche-explorer",
-    title: "Niche Explorer",
+    title: "Prompt Explorer",
     icon: "🔍",
     content: [
       "Enter your niche or product category and generate high-intent search queries that real buyers would type into AI assistants.",
       "Queries are AI-generated and focus on informational, comparison, and decision-stage intent.",
-      "Add any generated query directly to your Prompt Hub for ongoing tracking.",
+      "Add any generated query directly to your Prompts tab for ongoing tracking.",
       "Use this to build a comprehensive monitoring set beyond the prompts you can think of yourself.",
     ],
   },
@@ -178,10 +176,9 @@ const sections: DocSection[] = [
     title: "Data & Privacy",
     icon: "🔒",
     content: [
-      "All data is stored locally in your browser using localStorage and IndexedDB.",
+      "All data is stored locally in your browser using sessionStorage and IndexedDB.",
       "No data is sent to any server except when you explicitly run a scrape (via Bright Data API) or an analysis (via your configured LLM API).",
       "You can export all data as CSV from the Analytics tab.",
-      "Use the Reset Data button in Project Settings to permanently delete all stored data for the active workspace.",
       "BYOK (Bring Your Own Key) architecture — you provide your own API keys.",
     ],
   },
@@ -302,3 +299,6 @@ export function DocumentationTab() {
     </div>
   );
 }
+// Hot reload test - added at 2026-02-20
+// Updated for hot reload testing
+// Hot reload test - line 2

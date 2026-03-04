@@ -9,6 +9,7 @@ export type Provider =
 export type ScrapeRun = {
   provider: Provider;
   prompt: string;
+  promptId?: string | null;
   answer: string;
   sources: string[];
   createdAt: string;
@@ -20,6 +21,18 @@ export type ScrapeRun = {
   brandMentions: string[];
   /** Competitor names found in the answer */
   competitorMentions: string[];
+};
+
+/** A server-backed tracked prompt with stable identity */
+export type TrackedPrompt = {
+  id: string;
+  text: string;
+  label: string | null;
+  isActive: boolean;
+  schedule: string;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /** Structured section inside a battlecard */
@@ -138,7 +151,6 @@ export type AppState = {
   competitors: string;
   battlecards: Battlecard[];
   runs: ScrapeRun[];
-  auditUrl: string;
   auditReport: AuditReport | null;
   /** In-app scheduling */
   scheduleEnabled: boolean;
@@ -149,10 +161,9 @@ export type AppState = {
 };
 
 export const tabs = [
-  "Project Settings",
-  "Prompt Hub",
+  "Prompts",
   "Persona Fan-Out",
-  "Niche Explorer",
+  "Prompt Explorer",
   "Responses",
   "Visibility Analytics",
   "Citations",
@@ -161,6 +172,7 @@ export const tabs = [
   "AEO Audit",
   "Automation",
   "Documentation",
+  "Settings",
 ] as const;
 
 export type TabKey = (typeof tabs)[number];

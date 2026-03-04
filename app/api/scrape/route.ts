@@ -19,11 +19,24 @@ const InputSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const parsed = InputSchema.parse(body);
-    const result = await runAiScraper(parsed);
+    console.log("[API/SCRAPE] Request Body:", JSON.stringify(body, null, 2));
+
+    const parsed = InputSchema.safeParse(body);
+
+    if (!parsed.success) {
+      console.error("[API/SCRAPE] Validation Error:", parsed.error.format());
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.format() },
+        { status: 400 }
+      );
+    }
+
+    console.log("[API/SCRAPE] Validated Input:", parsed.data);
+    const result = await runAiScraper(parsed.data);
     return NextResponse.json(result);
   } catch (error) {
+    console.error("[API/SCRAPE] Error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 500 }); // Changed to 500 for non-validation errors
   }
 }

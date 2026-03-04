@@ -2,10 +2,10 @@ import { useState } from "react";
 import type { AuditReport, AuditCheck } from "@/components/dashboard/types";
 
 type AeoAuditTabProps = {
-  auditUrl: string;
+  brandWebsite: string;
   auditReport: AuditReport | null;
-  onAuditUrlChange: (value: string) => void;
   onRunAudit: () => void;
+  busy?: boolean;
 };
 
 const CATEGORY_META: Record<
@@ -77,10 +77,10 @@ function CheckRow({ check }: { check: AuditCheck }) {
 }
 
 export function AeoAuditTab({
-  auditUrl,
+  brandWebsite,
   auditReport,
-  onAuditUrlChange,
   onRunAudit,
+  busy = false,
 }: AeoAuditTabProps) {
   const categories: AuditCheck["category"][] = [
     "discovery",
@@ -90,23 +90,45 @@ export function AeoAuditTab({
     "rendering",
   ];
 
+  const hasWebsite = brandWebsite.trim().length > 0;
+
   return (
     <div className="space-y-4">
-      {/* ── Input bar ────────────────────────────── */}
-      <div className="flex gap-2">
-        <input
-          value={auditUrl}
-          onChange={(e) => onAuditUrlChange(e.target.value)}
-          placeholder="https://example.com"
-          className="bd-input flex-1 rounded-lg p-2.5 text-sm"
-        />
-        <button
-          onClick={onRunAudit}
-          className="bd-btn-primary whitespace-nowrap rounded-lg px-4 py-2.5 text-sm"
-        >
-          Run AEO Audit
-        </button>
-      </div>
+      {/* ── Brand website display ────────────────── */}
+      {hasWebsite ? (
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 items-center gap-2 rounded-lg border border-th-border bg-th-card-alt px-4 py-2.5">
+            <span className="text-sm text-th-text-muted">🌐</span>
+            <span className="text-sm font-medium text-th-text">{brandWebsite}</span>
+            <span className="ml-auto rounded-md bg-th-card-hover px-2 py-0.5 text-xs text-th-text-muted">
+              From Settings
+            </span>
+          </div>
+          <button
+            onClick={onRunAudit}
+            disabled={busy}
+            className="bd-btn-primary whitespace-nowrap rounded-lg px-4 py-2.5 text-sm disabled:opacity-50"
+          >
+            {busy ? "Auditing…" : auditReport ? "Re-run Audit" : "Run AEO Audit"}
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-lg">⚠️</span>
+            <div>
+              <p className="text-sm font-medium text-th-text">
+                Add your website URL to run an AEO Audit
+              </p>
+              <p className="mt-1 text-xs text-th-text-secondary">
+                Go to the <strong>Settings</strong> tab and enter your website URL. The audit will
+                check your site&apos;s readiness for AI search engines — llms.txt, Schema.org markup,
+                content structure, and more.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Results ──────────────────────────────── */}
       {auditReport && (

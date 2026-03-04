@@ -1,129 +1,47 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { loadSovereignValue, saveSovereignValue, clearSovereignStore } from "@/lib/client/sovereign-store";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { loadNoumAIValue, saveNoumAIValue, clearNoumAIStore } from "@/lib/client/noumai-store";
+import { useServerRuns } from "@/lib/client/use-server-runs";
+import { useTrackedPrompts } from "@/lib/client/use-tracked-prompts";
+import { useDashboardKpis } from "@/lib/client/use-dashboard-kpis";
+import {
+  extractBrandTerms,
+  extractCompetitorTerms,
+  findMentions,
+  detectSentiment,
+  calcVisibilityScore,
+  detectDrift,
+} from "@/lib/scoring";
 import { DEMO_STATE } from "@/lib/demo-data";
-import { AeoAuditTab } from "@/components/dashboard/tabs/aeo-audit-tab";
-import { AutomationTab } from "@/components/dashboard/tabs/automation-tab-v2";
-import { BattlecardsTab } from "@/components/dashboard/tabs/battlecards-tab";
-import { CitationOpportunitiesTab } from "@/components/dashboard/tabs/citation-opportunities-tab";
-import { NicheExplorerTab } from "@/components/dashboard/tabs/niche-explorer-tab";
-import { FanOutTab } from "@/components/dashboard/tabs/fan-out-tab";
-import { PartnerDiscoveryTab } from "@/components/dashboard/tabs/partner-discovery-tab";
-import { ProjectSettingsTab } from "@/components/dashboard/tabs/project-settings-tab";
-import { PromptHubTab } from "@/components/dashboard/tabs/prompt-hub-tab";
-import { ReputationSourcesTab } from "@/components/dashboard/tabs/reputation-sources-tab";
-import { VisibilityAnalyticsTab } from "@/components/dashboard/tabs/visibility-analytics-tab";
-import { DocumentationTab } from "@/components/dashboard/tabs/documentation-tab";
-import type { AppState, Battlecard, DriftAlert, Provider, RunDelta, ScheduleInterval, ScrapeRun, TabKey, Workspace } from "@/components/dashboard/types";
+import { useSession, signOut } from "next-auth/react";
+import { AeoAuditTab } from "@/components/dashboard/menu/aeo-audit-tab";
+import { AutomationTab } from "@/components/dashboard/menu/automation-tab-v2";
+import { BattlecardsTab } from "@/components/dashboard/menu/battlecards-tab";
+import { CitationOpportunitiesTab } from "@/components/dashboard/menu/citation-opportunities-tab";
+import { NicheExplorerTab } from "@/components/dashboard/menu/niche-explorer-tab";
+import { FanOutTab } from "@/components/dashboard/menu/fan-out-tab";
+import { PartnerDiscoveryTab } from "@/components/dashboard/menu/partner-discovery-tab";
+import { SettingsTab } from "@/components/dashboard/menu/settings-tab";
+import { PromptHubTab } from "@/components/dashboard/menu/prompt-hub-tab";
+import { ReputationSourcesTab } from "@/components/dashboard/menu/reputation-sources-tab";
+import { VisibilityAnalyticsTab } from "@/components/dashboard/menu/visibility-analytics-tab";
+import { DocumentationTab } from "@/components/dashboard/menu/documentation-tab";
+import { ScrapeProgressTracker, useScrapeTimer, type ScrapeProgress, type ProviderStatus } from "@/components/dashboard/scrape-progress-tracker";
+import { ActionInsights } from "@/components/dashboard/action-insights";
+import { tabIcons } from "@/components/dashboard/icons";
+import { tabMeta } from "@/components/dashboard/tab-meta";
+import { KpiCard, ScoreFactorCard } from "@/components/dashboard/kpi-card";
+import type { AppState, Battlecard, DriftAlert, Provider, ScheduleInterval, ScrapeRun, TabKey, TrackedPrompt, Workspace } from "@/components/dashboard/types";
 import { ALL_PROVIDERS, PROVIDER_LABELS, SCHEDULE_OPTIONS, tabs } from "@/components/dashboard/types";
 
-/* ── Inline SVG icon helpers (16×16) ─────────────────────────────── */
-function Icon({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0"
-    >
-      {children}
-    </svg>
-  );
-}
-
-const tabIcons: Record<TabKey, ReactNode> = {
-  "Project Settings": (
-    <Icon>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </Icon>
-  ),
-  "Prompt Hub": (
-    <Icon>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </Icon>
-  ),
-  "Persona Fan-Out": (
-    <Icon>
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </Icon>
-  ),
-  "Niche Explorer": (
-    <Icon>
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </Icon>
-  ),
-  Automation: (
-    <Icon>
-      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-    </Icon>
-  ),
-  "Competitor Battlecards": (
-    <Icon>
-      <rect width="7" height="9" x="3" y="3" rx="1" />
-      <rect width="7" height="5" x="14" y="3" rx="1" />
-      <rect width="7" height="9" x="14" y="12" rx="1" />
-      <rect width="7" height="5" x="3" y="16" rx="1" />
-    </Icon>
-  ),
-  Responses: (
-    <Icon>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      <path d="M8 9h8M8 13h6" />
-    </Icon>
-  ),
-  "Visibility Analytics": (
-    <Icon>
-      <path d="M3 3v18h18" />
-      <path d="m19 9-5 5-4-4-3 3" />
-    </Icon>
-  ),
-  Citations: (
-    <Icon>
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </Icon>
-  ),
-  "Citation Opportunities": (
-    <Icon>
-      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
-      <path d="M9 18h6" />
-      <path d="M10 22h4" />
-    </Icon>
-  ),
-  "AEO Audit": (
-    <Icon>
-      <path d="M9 11l3 3L22 4" />
-      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-    </Icon>
-  ),
-  Documentation: (
-    <Icon>
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-      <path d="M8 7h8M8 11h6" />
-    </Icon>
-  ),
-};
-
-const STORAGE_KEY = "sovereign-aeo-tracker-v1";
-const WORKSPACES_KEY = "sovereign-workspaces";
-const ACTIVE_WS_KEY = "sovereign-active-workspace";
-const THEME_KEY = "sovereign-theme";
+const STORAGE_KEY = "noumai-v1";
+const WORKSPACES_KEY = "noumai-workspaces";
+const ACTIVE_WS_KEY = "noumai-active-workspace";
+const THEME_KEY = "noumai-theme";
 
 function storageKeyForWorkspace(wsId: string) {
-  return wsId === "default" ? STORAGE_KEY : `sovereign-aeo-tracker-${wsId}`;
+  return wsId === "default" ? STORAGE_KEY : `noumai-${wsId}`;
 }
 
 function generateId() {
@@ -142,7 +60,7 @@ const defaultState: AppState = {
   provider: "chatgpt",
   activeProviders: ["chatgpt"],
   prompt:
-    "What is the strongest value proposition for sovereign AI analytics tools in 2026? Include sources.",
+    "What is the strongest value proposition for NoumAI in 2026? Include sources.",
   customPrompts: [
     "How visible is {brand} versus competitors for enterprise AI analytics tools? Include sources.",
     "What are the top 3 reasons to choose {brand} based on trusted sources?",
@@ -153,11 +71,10 @@ const defaultState: AppState = {
   nicheQueries: [],
   cronExpr: "0 */6 * * *",
   githubWorkflow:
-    "name: sovereign-aeo\non:\n  schedule:\n    - cron: '0 */6 * * *'\njobs:\n  track:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run test:scraper",
+    "name: noumai\non:\n  schedule:\n    - cron: '0 */6 * * *'\njobs:\n  track:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run test:scraper",
   competitors: "profound.com, otterly.ai, peec.ai",
   battlecards: [],
   runs: [],
-  auditUrl: "https://example.com",
   auditReport: null,
   scheduleEnabled: false,
   scheduleIntervalMs: 21600000,
@@ -165,83 +82,11 @@ const defaultState: AppState = {
   driftAlerts: [],
 };
 
-const tabMeta: Record<TabKey, { title: string; tooltip: string; details: string }> = {
-  "Project Settings": {
-    title: "Project Settings",
-    tooltip: "Set your brand, site, keywords, and context.",
-    details:
-      "Define the exact brand and website to track. This context is reused across analysis flows so outputs stay targeted to your business.",
-  },
-  "Prompt Hub": {
-    title: "Prompt Hub",
-    tooltip: "Manage your tracking prompt library.",
-    details:
-      "Build a library of prompts to track over time. Use {brand} to inject your brand name. Run individual prompts or batch-run all across selected models.",
-  },
-  "Persona Fan-Out": {
-    title: "Persona Fan-Out",
-    tooltip: "Create and run persona-specific prompt variants.",
-    details:
-      "Write one core query, define personas, and generate persona-specific variants. Run each variant independently to compare how different audience angles change model responses.",
-  },
-  "Niche Explorer": {
-    title: "Niche Explorer",
-    tooltip: "Generate high-intent GEO/AEO queries.",
-    details:
-      "Build a reusable bank of niche prompts focused on discoverability, citations, and buyer intent so your tracking set stays comprehensive.",
-  },
-  Automation: {
-    title: "Automation",
-    tooltip: "Configure recurring runs via cron/workflows.",
-    details:
-      "Store deployment-ready scheduling templates for Vercel Cron and GitHub Actions so tracking can run automatically on a repeat cadence.",
-  },
-  "Competitor Battlecards": {
-    title: "Competitors",
-    tooltip: "Compare model sentiment vs competitors.",
-    details:
-      "Generate side-by-side competitor summaries and sentiment snapshots. See which competitors are mentioned alongside your brand and identify gaps.",
-  },
-  Responses: {
-    title: "Responses",
-    tooltip: "Browse AI model responses with brand highlighting.",
-    details:
-      "Browse all collected AI responses. Brand and competitor mentions are highlighted in-context. View visibility scores, sentiment, and cited sources per response.",
-  },
-  "Visibility Analytics": {
-    title: "Analytics",
-    tooltip: "Track visibility score and sentiment trends over time.",
-    details:
-      "Monitor your brand visibility score over time, track sentiment distribution across responses, and export data as CSV for further analysis.",
-  },
-  Citations: {
-    title: "Citations",
-    tooltip: "Analyze cited sources grouped by domain.",
-    details:
-      "See which domains and URLs get cited most in AI responses. Group by domain to find citation hubs, or search by URL for specific sources. Export data as CSV.",
-  },
-  "Citation Opportunities": {
-    title: "Citation Opps",
-    tooltip: "Competitor-cited sources where you're not mentioned.",
-    details:
-      "Discover high-value outreach targets: URLs where AI models cite your competitors but don't mention your brand. Each opportunity includes an outreach brief.",
-  },
-  "AEO Audit": {
-    title: "AEO Audit",
-    tooltip: "Audit site readiness for LLM discovery.",
-    details:
-      "Run checks for llms.txt, schema signals, and BLUF-style clarity indicators to quickly assess AI-answer readiness of a target URL.",
-  },
-  Documentation: {
-    title: "Documentation",
-    tooltip: "Learn about every feature in the tracker.",
-    details:
-      "A comprehensive guide to all tabs, features, scoring methodology, supported models, and data privacy. Searchable and browsable.",
-  },
-};
+// tabMeta imported from @/components/dashboard/tab-meta
 
-export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } = {}) {
-  const [activeTab, setActiveTab] = useState<TabKey>("Prompt Hub");
+export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {}) {
+  const { data: session } = useSession();
+  const [activeTab, setActiveTab] = useState<TabKey>("Prompts");
   const [state, setState] = useState<AppState>(demoMode ? DEMO_STATE : defaultState);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(demoMode ? "Demo mode — read-only preview" : "");
@@ -250,6 +95,48 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
   const [activeWsId, setActiveWsId] = useState<string>("default");
   const [showWsPicker, setShowWsPicker] = useState(false);
   const [showScoreInfo, setShowScoreInfo] = useState(false);
+
+  // Resolved workspace id for API: real id when we have server list, else primary or null (Phase 1)
+  const resolvedWorkspaceId =
+    activeWsId && activeWsId !== "default" && workspaces.some((w) => w.id === activeWsId)
+      ? activeWsId
+      : workspaces.length > 0
+        ? workspaces[0].id
+        : null;
+
+  // Server-side run persistence (Phase 1: send X-Workspace-Id when we have a resolved id)
+  const { loadRuns, persistRun } = useServerRuns({
+    disabled: demoMode,
+    workspaceId: demoMode ? null : resolvedWorkspaceId,
+  });
+
+  // Server-backed tracked prompts (Phase 2)
+  const {
+    prompts: trackedPrompts,
+    activePrompts,
+    loadPrompts,
+    addPrompt: addTrackedPrompt,
+    updatePrompt: updateTrackedPrompt,
+    deletePrompt: deleteTrackedPrompt,
+  } = useTrackedPrompts({
+    disabled: demoMode,
+    workspaceId: demoMode ? null : resolvedWorkspaceId,
+  });
+
+  // Scrape progress tracking
+  const [scrapeProgress, setScrapeProgress] = useState<ScrapeProgress>({
+    providers: {},
+    elapsedSeconds: 0,
+    active: false,
+  });
+  const scrapeElapsed = useScrapeTimer(scrapeProgress.active);
+
+  // Keep progress.elapsedSeconds in sync with the timer
+  useEffect(() => {
+    if (scrapeProgress.active) {
+      setScrapeProgress((prev) => ({ ...prev, elapsedSeconds: scrapeElapsed }));
+    }
+  }, [scrapeElapsed, scrapeProgress.active]);
 
   /** Apply theme class to <html> */
   const applyTheme = useCallback((t: "light" | "dark" | "system") => {
@@ -273,86 +160,180 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
     const next = order[(order.indexOf(theme) + 1) % 3];
     setTheme(next);
     applyTheme(next);
-    if (!demoMode) localStorage.setItem(THEME_KEY, next);
+    if (!demoMode) sessionStorage.setItem(THEME_KEY, next);
   }
 
   /** Load workspaces on mount */
   useEffect(() => {
     // Theme
-    const savedTheme = localStorage.getItem(THEME_KEY) as "light" | "dark" | "system" | null;
+    const savedTheme = sessionStorage.getItem(THEME_KEY) as "light" | "dark" | "system" | null;
     if (savedTheme) {
       setTheme(savedTheme);
       applyTheme(savedTheme);
     }
 
-    if (demoMode) return; // Skip workspace loading in demo mode
+    if (demoMode) return; // Skip workspace / API in demo mode (Phase 1)
 
-    // Workspaces
-    try {
-      const raw = localStorage.getItem(WORKSPACES_KEY);
-      const parsed: Workspace[] = raw ? JSON.parse(raw) : [];
-      if (parsed.length === 0) {
-        // Create default workspace
-        const defaultWs: Workspace = { id: "default", brandName: "Default", createdAt: new Date().toISOString() };
-        parsed.push(defaultWs);
-        localStorage.setItem(WORKSPACES_KEY, JSON.stringify(parsed));
-      }
-      setWorkspaces(parsed);
-      const savedActiveId = localStorage.getItem(ACTIVE_WS_KEY) ?? parsed[0].id;
-      setActiveWsId(savedActiveId);
-    } catch {
-      const defaultWs: Workspace = { id: "default", brandName: "Default", createdAt: new Date().toISOString() };
-      setWorkspaces([defaultWs]);
-      setActiveWsId("default");
-    }
-  }, [applyTheme]);
+    fetch("/api/workspaces")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { workspaces?: Array<{ id: string; name: string; brandName?: string }> } | null) => {
+        const list = data?.workspaces;
+        if (Array.isArray(list) && list.length > 0) {
+          const serverWorkspaces: Workspace[] = list.map((w) => ({
+            id: w.id,
+            brandName: w.brandName ?? w.name ?? "Workspace",
+            createdAt: new Date().toISOString(),
+          }));
+          const primaryId = serverWorkspaces[0].id;
+          const savedActiveId = sessionStorage.getItem(ACTIVE_WS_KEY);
+          const activeId =
+            savedActiveId && serverWorkspaces.some((w) => w.id === savedActiveId)
+              ? savedActiveId
+              : primaryId;
+          setWorkspaces(serverWorkspaces);
+          setActiveWsId(activeId);
+          sessionStorage.setItem(ACTIVE_WS_KEY, activeId);
+          sessionStorage.setItem(WORKSPACES_KEY, JSON.stringify(serverWorkspaces));
+        } else {
+          try {
+            const raw = sessionStorage.getItem(WORKSPACES_KEY);
+            const parsed: Workspace[] = raw ? JSON.parse(raw) : [];
+            if (parsed.length === 0) {
+              const defaultWs: Workspace = { id: "default", brandName: "Default", createdAt: new Date().toISOString() };
+              parsed.push(defaultWs);
+              sessionStorage.setItem(WORKSPACES_KEY, JSON.stringify(parsed));
+            }
+            setWorkspaces(parsed);
+            setActiveWsId(sessionStorage.getItem(ACTIVE_WS_KEY) ?? parsed[0].id);
+          } catch {
+            setWorkspaces([{ id: "default", brandName: "Default", createdAt: new Date().toISOString() }]);
+            setActiveWsId("default");
+          }
+        }
+      })
+      .catch(() => {
+        setWorkspaces([{ id: "default", brandName: "Default", createdAt: new Date().toISOString() }]);
+        setActiveWsId("default");
+      });
+  }, [applyTheme, demoMode]);
 
-  /** Load app state for active workspace */
+  /** Load app state for active workspace, then hydrate brand from DB if empty */
   useEffect(() => {
     if (demoMode || !activeWsId) return;
     let mounted = true;
     const key = storageKeyForWorkspace(activeWsId);
-    loadSovereignValue<AppState>(key, defaultState).then((data) => {
-      if (mounted) {
-        // Merge saved state with defaults so new fields are never undefined
-        const merged: AppState = {
-          ...defaultState,
-          ...data,
-          brand: { ...defaultState.brand, ...(data.brand ?? {}) },
-          provider: ALL_PROVIDERS.includes(data.provider as Provider)
-            ? (data.provider as Provider)
-            : defaultState.provider,
-          activeProviders: Array.isArray(data.activeProviders)
-            ? data.activeProviders.filter((provider): provider is Provider =>
-                ALL_PROVIDERS.includes(provider as Provider),
-              )
-            : [],
-        };
-        if (merged.activeProviders.length === 0) {
-          merged.activeProviders = [merged.provider];
+    loadNoumAIValue<AppState>(key, defaultState).then(async (data) => {
+      if (!mounted) return;
+
+      // Merge saved state with defaults so new fields are never undefined
+      const merged: AppState = {
+        ...defaultState,
+        ...data,
+        brand: { ...defaultState.brand, ...(data.brand ?? {}) },
+        provider: ALL_PROVIDERS.includes(data.provider as Provider)
+          ? (data.provider as Provider)
+          : defaultState.provider,
+        activeProviders: Array.isArray(data.activeProviders)
+          ? data.activeProviders.filter((provider): provider is Provider =>
+              ALL_PROVIDERS.includes(provider as Provider),
+            )
+          : [],
+      };
+      if (merged.activeProviders.length === 0) {
+        merged.activeProviders = [merged.provider];
+      }
+
+      // If brand is empty, pull from onboarding DB data and persist to this workspace's key
+      if (!merged.brand.brandName?.trim()) {
+        try {
+          const res = await fetch("/api/onboarding");
+          if (res.ok && mounted) {
+            const onboarding = await res.json();
+            const ws = onboarding.workspace;
+            if (ws?.brandName?.trim()) {
+              merged.brand = {
+                ...merged.brand,
+                brandName: ws.brandName || "",
+                brandAliases: ws.brandAliases || "",
+                website: ws.website || "",
+                industry: ws.industry || "",
+                description: ws.brandDescription || "",
+                keywords: ws.targetKeywords || "",
+              };
+              const competitorsString = Array.isArray(ws.competitors)
+                ? ws.competitors
+                    .filter((c: { url?: string }) => c.url?.trim())
+                    .map((c: { url: string }) => c.url.trim())
+                    .join(", ")
+                : "";
+              if (competitorsString) merged.competitors = competitorsString;
+
+              // Merge savedStarterPrompts into customPrompts (deduplicated) — backward compat fallback
+              // TrackedPrompts from server are the primary source (loaded separately)
+              if (
+                Array.isArray(onboarding.savedStarterPrompts) &&
+                onboarding.savedStarterPrompts.length > 0
+              ) {
+                const existing = new Set(merged.customPrompts);
+                const toAdd = (onboarding.savedStarterPrompts as string[]).filter(
+                  (p) => p.trim() && !existing.has(p)
+                );
+                if (toAdd.length > 0) {
+                  merged.customPrompts = [...toAdd, ...merged.customPrompts].slice(0, 50);
+                }
+              }
+
+              // Persist so subsequent loads don't need the API call
+              saveNoumAIValue(key, merged).catch(() => {});
+            }
+          }
+        } catch {
+          // Non-fatal — dashboard works with empty brand
         }
-        setState(merged);
+      }
+
+      // Hydrate runs from server (source of truth), falling back to local cache
+      if (!demoMode) {
+        try {
+          const serverRuns = await loadRuns();
+          if (serverRuns && serverRuns.length > 0 && mounted) {
+            // Server runs take precedence; merge any local-only runs by deduplicating on prompt+provider+createdAt
+            const serverKeys = new Set(serverRuns.map((r) => `${r.prompt}|${r.provider}|${r.createdAt}`));
+            const localOnly = merged.runs.filter((r) => !serverKeys.has(`${r.prompt}|${r.provider}|${r.createdAt}`));
+            merged.runs = [...serverRuns, ...localOnly].slice(0, 500);
+          }
+        } catch {
+          // Non-fatal — use runs from local cache
+        }
+      }
+
+      if (mounted) setState(merged);
+
+      // Load tracked prompts from server (Phase 2 — separate from AppState)
+      if (!demoMode) {
+        loadPrompts().catch(() => {});
       }
     });
     return () => {
       mounted = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWsId]);
 
   useEffect(() => {
     if (demoMode || !activeWsId) return;
-    saveSovereignValue(storageKeyForWorkspace(activeWsId), state);
+    saveNoumAIValue(storageKeyForWorkspace(activeWsId), state);
     // Update workspace brandName if changed
     if (state.brand.brandName) {
       setWorkspaces((prev) => {
         const updated = prev.map((ws) =>
           ws.id === activeWsId ? { ...ws, brandName: state.brand.brandName || ws.brandName } : ws,
         );
-        localStorage.setItem(WORKSPACES_KEY, JSON.stringify(updated));
+        sessionStorage.setItem(WORKSPACES_KEY, JSON.stringify(updated));
         return updated;
       });
     }
-  }, [state, activeWsId]);
+  }, [state, activeWsId, demoMode]);
 
   /** ref to the scheduler interval so we can clear/re-create it */
   const schedulerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -363,45 +344,20 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
   busyRef.current = busy;
 
   /** ref to latest callScrapeOne so the scheduler callback doesn't use stale brand terms */
-  const callScrapeOneRef = useRef<(prompt: string, provider: Provider) => Promise<ScrapeRun | null>>(
+  const callScrapeOneRef = useRef<(prompt: string, provider: Provider, promptId?: string | null) => Promise<ScrapeRun | null>>(
     // placeholder — will be assigned after callScrapeOne is defined
     async () => null,
   );
 
-  /** Detect drift after a batch of new runs */
-  function detectDrift(newRuns: ScrapeRun[], existingRuns: ScrapeRun[]): DriftAlert[] {
-    const alerts: DriftAlert[] = [];
-    const DRIFT_THRESHOLD = 10; // minimum score change to trigger alert
-
-    newRuns.forEach((newRun) => {
-      // Find the most recent existing run with same prompt+provider
-      const prev = existingRuns.find(
-        (r) => r.prompt === newRun.prompt && r.provider === newRun.provider,
-      );
-      if (!prev) return;
-      const delta = (newRun.visibilityScore ?? 0) - (prev.visibilityScore ?? 0);
-      if (Math.abs(delta) >= DRIFT_THRESHOLD) {
-        alerts.push({
-          id: `drift-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          prompt: newRun.prompt,
-          provider: newRun.provider,
-          oldScore: prev.visibilityScore ?? 0,
-          newScore: newRun.visibilityScore ?? 0,
-          delta,
-          createdAt: new Date().toISOString(),
-          dismissed: false,
-        });
-      }
-    });
-
-    return alerts;
-  }
+  // detectDrift is now imported from @/lib/scoring
 
   /** Run a scheduled batch and detect drift */
   const runScheduledBatch = useCallback(async () => {
     const s = stateRef.current;
     if (busyRef.current) return; // skip if already running
-    const prompts = s.customPrompts.length > 0 ? s.customPrompts : [s.prompt];
+    const prompts = activePrompts.length > 0
+      ? activePrompts.map((tp) => tp.text)
+      : s.customPrompts.length > 0 ? s.customPrompts : [s.prompt];
     const providers = s.activeProviders;
     if (prompts.length === 0 || providers.length === 0) return;
 
@@ -432,7 +388,6 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
       `Auto-run complete: ${allRuns.length} results.${newAlerts.length > 0 ? ` ${newAlerts.length} drift alert${newAlerts.length > 1 ? "s" : ""} triggered.` : ""}`,
     );
     setBusy(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Set up / tear down the scheduler interval */
@@ -450,7 +405,7 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
         schedulerRef.current = null;
       }
     };
-  }, [state.scheduleEnabled, state.scheduleIntervalMs, runScheduledBatch]);
+  }, [state.scheduleEnabled, state.scheduleIntervalMs, runScheduledBatch, demoMode]);
 
   function dismissAlert(id: string) {
     setState((prev) => ({
@@ -471,9 +426,9 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
   function switchWorkspace(wsId: string) {
     if (demoMode) { setMessage("Demo mode — workspaces are read-only"); return; }
     // Save current state first
-    saveSovereignValue(storageKeyForWorkspace(activeWsId), state);
+    saveNoumAIValue(storageKeyForWorkspace(activeWsId), state);
     setActiveWsId(wsId);
-    localStorage.setItem(ACTIVE_WS_KEY, wsId);
+    sessionStorage.setItem(ACTIVE_WS_KEY, wsId);
     setShowWsPicker(false);
     setMessage(`Switched to ${workspaces.find((w) => w.id === wsId)?.brandName ?? "workspace"}`);
   }
@@ -483,12 +438,12 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
     const ws: Workspace = { id: generateId(), brandName: name, createdAt: new Date().toISOString() };
     const updated = [...workspaces, ws];
     setWorkspaces(updated);
-    localStorage.setItem(WORKSPACES_KEY, JSON.stringify(updated));
+    sessionStorage.setItem(WORKSPACES_KEY, JSON.stringify(updated));
     // Save current, switch to new
-    saveSovereignValue(storageKeyForWorkspace(activeWsId), state);
+    saveNoumAIValue(storageKeyForWorkspace(activeWsId), state);
     setState({ ...defaultState, brand: { ...defaultState.brand, brandName: name } });
     setActiveWsId(ws.id);
-    localStorage.setItem(ACTIVE_WS_KEY, ws.id);
+    sessionStorage.setItem(ACTIVE_WS_KEY, ws.id);
     setShowWsPicker(false);
     setMessage(`Created workspace: ${name}`);
   }
@@ -499,263 +454,44 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
     if (!window.confirm("Delete this workspace and all its data?")) return;
     const updated = workspaces.filter((w) => w.id !== wsId);
     setWorkspaces(updated);
-    localStorage.setItem(WORKSPACES_KEY, JSON.stringify(updated));
-    clearSovereignStore(storageKeyForWorkspace(wsId));
+    sessionStorage.setItem(WORKSPACES_KEY, JSON.stringify(updated));
+    clearNoumAIStore(storageKeyForWorkspace(wsId));
     if (activeWsId === wsId) {
       switchWorkspace(updated[0].id);
     }
   }
 
-  const partnerLeaderboard = useMemo(() => {
-    // Client-side junk URL filter as safety net
-    const junkHosts = [
-      "cloudfront.net", "cdn.prod.website-files.com", "cdn.jsdelivr.net",
-      "cdnjs.cloudflare.com", "unpkg.com", "fastly.net", "akamaihd.net",
-      "connect.facebook.net", "facebook.net", "google-analytics.com",
-      "googletagmanager.com", "doubleclick.net", "w3.org", "schema.org",
-      "amazonaws.com", "cloudflare.com", "hotjar.com", "sentry.io",
-    ];
-    const junkExtPattern = /\.(png|jpe?g|gif|svg|webp|avif|ico|css|js|woff2?|ttf|eot|mp4|webm)(\?|$)/i;
+  // ── KPIs (extracted to useDashboardKpis hook) ──
+  const {
+    totalSources,
+    citationOpportunities,
+    latestRun,
+    runDeltas,
+    movers,
+    kpiVisibilityDelta,
+    unreadAlertCount,
+    visibilityTrend,
+    partnerLeaderboard,
+    brandCtx,
+  } = useDashboardKpis(state);
 
-    function isCleanUrl(url: string): boolean {
-      try {
-        const parsed = new URL(url);
-        const host = parsed.hostname.toLowerCase();
-        if (junkHosts.some((j) => host === j || host.endsWith(`.${j}`))) return false;
-        if (junkExtPattern.test(parsed.pathname)) return false;
-        if (parsed.search.length > 200) return false;
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    const map = new Map<string, { count: number; prompts: Set<string> }>();
-    state.runs.forEach((run) => {
-      run.sources.filter(isCleanUrl).forEach((source) => {
-        const existing = map.get(source) ?? { count: 0, prompts: new Set<string>() };
-        existing.count += 1;
-        existing.prompts.add(run.prompt);
-        map.set(source, existing);
-      });
-    });
-
-    return [...map.entries()]
-      .map(([url, data]) => ({ url, count: data.count, prompts: [...data.prompts] }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 50);
-  }, [state.runs]);
-
-  const visibilityTrend = useMemo(() => {
-    const byDay = new Map<string, { total: number; sum: number }>();
-
-    state.runs.forEach((run) => {
-      const day = run.createdAt.slice(0, 10);
-      const row = byDay.get(day) ?? { total: 0, sum: 0 };
-      row.total += 1;
-      row.sum += run.visibilityScore ?? 0;
-      byDay.set(day, row);
-    });
-
-    return [...byDay.entries()]
-      .map(([day, { total, sum }]) => ({
-        day,
-        visibility: total > 0 ? Math.round(sum / total) : 0,
-      }))
-      .sort((a, b) => a.day.localeCompare(b.day));
-  }, [state.runs]);
-
-  const totalSources = useMemo(
-    () => state.runs.reduce((acc, run) => acc + run.sources.length, 0),
-    [state.runs],
-  );
-
-  /** Count unique domains cited in runs where the brand was NOT mentioned — these are outreach targets */
-  const citationOpportunities = useMemo(() => {
-    const domains = new Set<string>();
-    state.runs
-      .filter((r) => r.sentiment === "not-mentioned" || (r.brandMentions?.length ?? 0) === 0)
-      .forEach((r) => {
-        r.sources.forEach((url) => {
-          try {
-            const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-            domains.add(host);
-          } catch { /* skip */ }
-        });
-      });
-    return domains.size;
-  }, [state.runs]);
-
-  const latestRun = state.runs[0];
-
-  /** Compute score deltas: for each prompt+provider, compare latest run to the previous one */
-  const runDeltas: RunDelta[] = useMemo(() => {
-    const grouped = new Map<string, ScrapeRun[]>();
-    state.runs.forEach((run) => {
-      const key = `${run.prompt}|||${run.provider}`;
-      const list = grouped.get(key) ?? [];
-      list.push(run);
-      grouped.set(key, list);
-    });
-
-    const deltas: RunDelta[] = [];
-    grouped.forEach((runs) => {
-      // Sort newest first
-      const sorted = [...runs].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      if (sorted.length < 2) return;
-      const curr = sorted[0];
-      const prev = sorted[1];
-      const d = (curr.visibilityScore ?? 0) - (prev.visibilityScore ?? 0);
-      if (d !== 0) {
-        deltas.push({
-          prompt: curr.prompt,
-          provider: curr.provider,
-          currentScore: curr.visibilityScore ?? 0,
-          previousScore: prev.visibilityScore ?? 0,
-          delta: d,
-          currentRun: curr,
-          previousRun: prev,
-        });
-      }
-    });
-
-    return deltas.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [state.runs]);
-
-  /** Top movers — biggest absolute delta changes */
-  const movers = useMemo(() => runDeltas.slice(0, 5), [runDeltas]);
-
-  /** KPI delta: compare current period avg visibility vs prior period */
-  const kpiVisibilityDelta = useMemo(() => {
-    if (state.runs.length < 2) return null;
-    const sorted = [...state.runs].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-    const mid = Math.floor(sorted.length / 2);
-    const recentHalf = sorted.slice(0, mid);
-    const olderHalf = sorted.slice(mid);
-    if (recentHalf.length === 0 || olderHalf.length === 0) return null;
-    const recentAvg = recentHalf.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / recentHalf.length;
-    const olderAvg = olderHalf.reduce((a, r) => a + (r.visibilityScore ?? 0), 0) / olderHalf.length;
-    return Math.round(recentAvg - olderAvg);
-  }, [state.runs]);
-
-  /** Unread drift alerts count */
-  const unreadAlertCount = useMemo(
-    () => state.driftAlerts.filter((a) => !a.dismissed).length,
-    [state.driftAlerts],
-  );
-
-  /** Brand context string injected into AI prompts when available */
-  const brandCtx = state.brand.brandName
-    ? `Context: Brand "${state.brand.brandName}"${state.brand.website ? ` (${state.brand.website})` : ""}${state.brand.industry ? `, industry: ${state.brand.industry}` : ""}${state.brand.keywords ? `, keywords: ${state.brand.keywords}` : ""}. `
-    : "";
-
-  /** Build list of brand names/aliases to detect */
+  // ── Brand helpers (delegate to lib/scoring.ts) ──
   function getBrandTerms(): string[] {
-    const terms: string[] = [];
-    if (state.brand.brandName?.trim()) terms.push(state.brand.brandName.trim());
-    if (state.brand.brandAliases?.trim()) {
-      (state.brand.brandAliases ?? "").split(",").forEach((a) => {
-        const t = a.trim();
-        if (t) terms.push(t);
-      });
-    }
-    return terms;
+    return extractBrandTerms(state.brand.brandName ?? "", state.brand.brandAliases ?? "");
   }
 
   function getCompetitorTerms(): string[] {
-    return state.competitors
-      .split(",")
-      .map((c) => c.trim())
-      .filter(Boolean);
+    return extractCompetitorTerms(state.competitors);
   }
 
-  /** Find which terms appear in text (case-insensitive) */
-  function findMentions(text: string, terms: string[]): string[] {
-    const lower = text.toLowerCase();
-    return terms.filter((t) => lower.includes(t.toLowerCase()));
-  }
-
-  /** Detect basic sentiment toward brand in answer */
-  function detectSentiment(
-    answer: string,
-    brandTerms: string[],
-  ): "positive" | "neutral" | "negative" | "not-mentioned" {
-    if (brandTerms.length === 0) return "not-mentioned";
-    const lower = answer.toLowerCase();
-    const mentioned = brandTerms.some((t) => lower.includes(t.toLowerCase()));
-    if (!mentioned) return "not-mentioned";
-
-    const positiveWords = [
-      "best", "leading", "top", "excellent", "recommend", "great", "outstanding",
-      "innovative", "trusted", "powerful", "superior", "preferred", "popular",
-      "reliable", "impressive", "standout", "strong", "ideal",
-    ];
-    const negativeWords = [
-      "worst", "poor", "bad", "avoid", "lacking", "weak", "inferior",
-      "disappointing", "overpriced", "limited", "outdated", "risky",
-      "problematic", "concern", "drawback", "downside",
-    ];
-
-    let posScore = 0;
-    let negScore = 0;
-    positiveWords.forEach((w) => { if (lower.includes(w)) posScore++; });
-    negativeWords.forEach((w) => { if (lower.includes(w)) negScore++; });
-
-    if (posScore > negScore + 1) return "positive";
-    if (negScore > posScore + 1) return "negative";
-    return "neutral";
-  }
-
-  /** Calculate 0-100 visibility score */
-  function calcVisibilityScore(
-    answer: string,
-    sources: string[],
-    brandTerms: string[],
-  ): number {
-    if (brandTerms.length === 0) return 0;
-    const lower = answer.toLowerCase();
-    let score = 0;
-
-    // Brand mentioned at all? +30
-    const mentioned = brandTerms.some((t) => lower.includes(t.toLowerCase()));
-    if (!mentioned) return 0;
-    score += 30;
-
-    // Mentioned in first 200 chars (prominent position)? +20
-    const first200 = lower.slice(0, 200);
-    if (brandTerms.some((t) => first200.includes(t.toLowerCase()))) score += 20;
-
-    // Multiple mentions? +15
-    const mentionCount = brandTerms.reduce((acc, t) => {
-      const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      return acc + (lower.match(re)?.length ?? 0);
-    }, 0);
-    if (mentionCount >= 3) score += 15;
-    else if (mentionCount >= 2) score += 8;
-
-    // Brand website in sources? +20
-    const websiteDomain = state.brand.website
-      .replace(/^https?:\/\//, "")
-      .replace(/\/.*$/, "")
-      .toLowerCase();
-    if (websiteDomain && sources.some((s) => s.toLowerCase().includes(websiteDomain))) {
-      score += 20;
-    }
-
-    // Positive sentiment bonus +15
-    const sent = detectSentiment(answer, brandTerms);
-    if (sent === "positive") score += 15;
-    else if (sent === "neutral") score += 5;
-
-    return Math.min(100, score);
-  }
+  /** Compute website domain for scoring */
+  const websiteDomain = (state.brand.website ?? "")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .toLowerCase();
 
   /** Run a single scrape against one specific provider */
-  async function callScrapeOne(prompt: string, provider: Provider): Promise<ScrapeRun | null> {
+  async function callScrapeOne(prompt: string, provider: Provider, promptId?: string | null): Promise<ScrapeRun | null> {
     if (demoMode) { setMessage("Demo mode — API calls are disabled"); return null; }
     try {
       const response = await fetch("/api/scrape", {
@@ -776,17 +512,23 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
       const brandTerms = getBrandTerms();
       const competitorTerms = getCompetitorTerms();
 
-      return {
+      const run: ScrapeRun = {
         provider: data.provider,
         prompt: data.prompt,
+        promptId: promptId || null,
         answer: answerText,
         sources: sourceList,
         createdAt: data.createdAt || new Date().toISOString(),
-        visibilityScore: calcVisibilityScore(answerText, sourceList, brandTerms),
+        visibilityScore: calcVisibilityScore(answerText, sourceList, brandTerms, websiteDomain),
         sentiment: detectSentiment(answerText, brandTerms),
         brandMentions: findMentions(answerText, brandTerms),
         competitorMentions: findMentions(answerText, competitorTerms),
       };
+
+      // Persist to server in background (fire-and-forget, non-blocking)
+      persistRun(run);
+
+      return run;
     } catch {
       return null;
     }
@@ -802,11 +544,27 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
       : [state.provider];
     const count = providers.length;
     setBusy(true);
-    setMessage(`Running across ${count} model${count > 1 ? "s" : ""}...`);
+    setMessage(`Running across ${count} model${count > 1 ? "s" : ""}…`);
+
+    // Initialize progress for each provider
+    const initialStatus: Record<string, ProviderStatus> = {};
+    providers.forEach((p) => { initialStatus[p] = "running"; });
+    setScrapeProgress({ providers: initialStatus, elapsedSeconds: 0, active: true });
 
     try {
       const results = await Promise.allSettled(
-        providers.map((p) => callScrapeOne(prompt, p)),
+        providers.map(async (p) => {
+          const run = await callScrapeOne(prompt, p);
+          // Update this provider's status
+          setScrapeProgress((prev) => ({
+            ...prev,
+            providers: {
+              ...prev.providers,
+              [p]: run ? "done" : "failed",
+            },
+          }));
+          return run;
+        }),
       );
 
       const runs: ScrapeRun[] = results
@@ -831,32 +589,64 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
       setMessage(error instanceof Error ? error.message : "Failed to run scraper.");
     } finally {
       setBusy(false);
+      setScrapeProgress((prev) => ({ ...prev, active: false }));
     }
   }
 
   /** Batch run all custom prompts across all active providers */
   async function batchRunAllPrompts() {
-    const prompts = state.customPrompts.map((p) =>
-      p.replace(/\{brand\}/gi, state.brand.brandName || "our brand"),
-    );
-    if (prompts.length === 0) {
+    // Prefer server-backed active prompts; fallback to local customPrompts
+    const promptItems: { text: string; promptId?: string | null }[] =
+      activePrompts.length > 0
+        ? activePrompts.map((tp) => ({
+            text: tp.text.replace(/\{brand\}/gi, state.brand.brandName || "our brand"),
+            promptId: tp.id,
+          }))
+        : state.customPrompts.map((p) => ({
+            text: p.replace(/\{brand\}/gi, state.brand.brandName || "our brand"),
+          }));
+
+    if (promptItems.length === 0) {
       setMessage("No tracking prompts to run. Add prompts first.");
       return;
     }
     const providers = state.activeProviders.length > 0
       ? state.activeProviders
       : [state.provider];
-    const totalJobs = prompts.length * providers.length;
+    const totalJobs = promptItems.length * providers.length;
     setBusy(true);
+
+    // Initialize progress — all providers start as "pending"
+    const initialStatus: Record<string, ProviderStatus> = {};
+    providers.forEach((p) => { initialStatus[p] = "pending"; });
+    setScrapeProgress({ providers: initialStatus, elapsedSeconds: 0, active: true });
 
     let completed = 0;
     let failed = 0;
     const allRuns: ScrapeRun[] = [];
 
-    for (const prompt of prompts) {
-      setMessage(`Batch: ${completed}/${totalJobs} done...`);
+    for (const item of promptItems) {
+      setMessage(`Batch: ${completed}/${totalJobs} done…`);
+
+      // Mark all providers as "running" for this prompt
+      setScrapeProgress((prev) => ({
+        ...prev,
+        providers: Object.fromEntries(
+          Object.entries(prev.providers).map(([p, s]) =>
+            [p, s === "done" || s === "failed" ? s : "running"] as [string, ProviderStatus]
+          )
+        ),
+      }));
+
       const results = await Promise.allSettled(
-        providers.map((p) => callScrapeOne(prompt, p)),
+        providers.map(async (p) => {
+          const run = await callScrapeOne(item.text, p, item.promptId);
+          setScrapeProgress((prev) => ({
+            ...prev,
+            providers: { ...prev.providers, [p]: run ? "done" : "failed" },
+          }));
+          return run;
+        }),
       );
       for (const r of results) {
         if (r.status === "fulfilled" && r.value) {
@@ -867,6 +657,14 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
           completed++;
         }
       }
+
+      // Reset provider statuses to "pending" for next prompt batch
+      setScrapeProgress((prev) => ({
+        ...prev,
+        providers: Object.fromEntries(
+          Object.entries(prev.providers).map(([p]) => [p, "pending"] as [string, ProviderStatus])
+        ),
+      }));
     }
 
     setState((prev) => ({
@@ -875,9 +673,10 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
     }));
 
     setMessage(
-      `Batch complete: ${allRuns.length} results from ${prompts.length} prompts × ${providers.length} models.${failed > 0 ? ` ${failed} failed.` : ""}`,
+      `Batch complete: ${allRuns.length} results from ${promptItems.length} prompts × ${providers.length} models.${failed > 0 ? ` ${failed} failed.` : ""}`,
     );
     setBusy(false);
+    setScrapeProgress((prev) => ({ ...prev, active: false }));
   }
 
   function generatePersonaFanout() {
@@ -896,18 +695,35 @@ export function SovereignDashboard({ demoMode = false }: { demoMode?: boolean } 
   function addCustomPrompt(value: string) {
     const cleaned = value.trim();
     if (!cleaned) return;
-    setState((prev) => {
-      if (prev.customPrompts.includes(cleaned)) return prev;
-      return { ...prev, customPrompts: [cleaned, ...prev.customPrompts].slice(0, 50) };
+    // Add to server-backed TrackedPrompts (Phase 2)
+    addTrackedPrompt(cleaned).then((created) => {
+      if (created) {
+        setMessage("Tracking prompt added.");
+      } else {
+        // Fallback to local state if API fails
+        setState((prev) => {
+          if (prev.customPrompts.includes(cleaned)) return prev;
+          return { ...prev, customPrompts: [cleaned, ...prev.customPrompts].slice(0, 50) };
+        });
+        setMessage("Tracking prompt added (locally).");
+      }
     });
-    setMessage("Tracking prompt added.");
   }
 
-  function removeCustomPrompt(value: string) {
-    setState((prev) => ({
-      ...prev,
-      customPrompts: prev.customPrompts.filter((entry) => entry !== value),
-    }));
+  function removeCustomPrompt(promptIdOrText: string) {
+    // Try to find and delete by TrackedPrompt id first
+    const tracked = trackedPrompts.find((p) => p.id === promptIdOrText);
+    if (tracked) {
+      deleteTrackedPrompt(tracked.id).then((ok) => {
+        if (ok) setMessage("Prompt removed.");
+      });
+    } else {
+      // Fallback: remove from local customPrompts by text
+      setState((prev) => ({
+        ...prev,
+        customPrompts: prev.customPrompts.filter((entry) => entry !== promptIdOrText),
+      }));
+    }
   }
 
   function extractNicheQueries(payload: unknown) {
@@ -1152,14 +968,19 @@ Now analyze all ${competitorList.length} competitors:`,
 
   async function runAudit() {
     if (demoMode) { setMessage("Demo mode — API calls are disabled"); return; }
+    const website = state.brand.website?.trim();
+    if (!website) {
+      setMessage("Add your website URL in Settings before running an audit.");
+      return;
+    }
     setBusy(true);
-    setMessage("Running AEO audit...");
+    setMessage("Running AEO audit…");
 
     try {
       const response = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: state.auditUrl }),
+        body: JSON.stringify({ url: website }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Audit failed");
@@ -1176,15 +997,15 @@ Now analyze all ${competitorList.length} competitors:`,
   async function handleResetData() {
     if (demoMode) { setMessage("Demo mode — data cannot be modified"); return; }
     if (!window.confirm("This will delete ALL saved data (runs, prompts, settings). Continue?")) return;
-    await clearSovereignStore(storageKeyForWorkspace(activeWsId));
+    await clearNoumAIStore(storageKeyForWorkspace(activeWsId));
     setState(defaultState);
     setMessage("All data cleared.");
   }
 
   function renderActiveTab() {
-    if (activeTab === "Project Settings") {
+    if (activeTab === "Settings") {
       return (
-        <ProjectSettingsTab
+        <SettingsTab
           brand={state.brand}
           onBrandChange={(patch) =>
             setState((prev) => ({ ...prev, brand: { ...prev.brand, ...patch } }))
@@ -1194,15 +1015,17 @@ Now analyze all ${competitorList.length} competitors:`,
       );
     }
 
-    if (activeTab === "Prompt Hub") {
+    if (activeTab === "Prompts") {
       return (
         <PromptHubTab
+          prompts={trackedPrompts}
           customPrompts={state.customPrompts}
           brandName={state.brand.brandName}
           busy={busy}
           activeProviderCount={state.activeProviders.length}
           onAddCustomPrompt={addCustomPrompt}
           onRemoveCustomPrompt={removeCustomPrompt}
+          onToggleActive={(id, isActive) => updateTrackedPrompt(id, { isActive })}
           onRunPrompt={callScrape}
           onBatchRunAll={batchRunAllPrompts}
         />
@@ -1224,12 +1047,13 @@ Now analyze all ${competitorList.length} competitors:`,
       );
     }
 
-    if (activeTab === "Niche Explorer") {
+    if (activeTab === "Prompt Explorer") {
       return (
         <NicheExplorerTab
           niche={state.niche}
           nicheQueries={state.nicheQueries}
-          trackedPrompts={state.customPrompts}
+          trackedPrompts={trackedPrompts.map((tp) => tp.text)}
+          busy={busy}
           onNicheChange={(value) => setState((prev) => ({ ...prev, niche: value }))}
           onGenerateQueries={runNicheExplorer}
           onAddToTracking={addCustomPrompt}
@@ -1298,10 +1122,10 @@ Now analyze all ${competitorList.length} competitors:`,
 
     return (
       <AeoAuditTab
-        auditUrl={state.auditUrl}
+        brandWebsite={state.brand.website || ""}
         auditReport={state.auditReport}
-        onAuditUrlChange={(value) => setState((prev) => ({ ...prev, auditUrl: value }))}
         onRunAudit={runAudit}
+        busy={busy}
       />
     );
   }
@@ -1379,15 +1203,16 @@ Now analyze all ${competitorList.length} competitors:`,
                   </div>
                 ))}
               </div>
-              <button
+              {/* <button
                 onClick={() => {
                   const name = window.prompt("Brand / workspace name:");
                   if (name?.trim()) createWorkspace(name.trim());
                 }}
                 className="mt-2 flex w-full items-center gap-1.5 rounded-md border border-dashed border-th-border px-2 py-1.5 text-sm text-th-text-accent hover:bg-th-accent-soft transition-colors"
+                title="Workspace creation disabled until Phase 2"
               >
                 <span className="text-base">+</span> New Brand
-              </button>
+              </button> */}
             </div>
           )}
           </>
@@ -1398,7 +1223,7 @@ Now analyze all ${competitorList.length} competitors:`,
         <nav className="flex-1 overflow-y-auto px-2 py-2">
           {tabs.map((tab) => {
             const active = activeTab === tab;
-            const isSettings = tab === "Project Settings";
+            const isSettings = tab === "Settings";
             return (
               <div key={tab}>
                 {isSettings && (
@@ -1436,42 +1261,43 @@ Now analyze all ${competitorList.length} competitors:`,
           })}
         </nav>
 
-        {/* Bright Data CTA */}
-        <div className="border-t border-th-border px-3 py-3">
-          <a
-            href="https://brightdata.com/?utm_source=geo-tracker-os"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex flex-col items-center gap-2 rounded-xl bg-gradient-to-br from-[#1a6dff] via-[#3b82f6] to-[#6366f1] px-4 py-4 shadow-lg transition-all hover:shadow-xl hover:brightness-110"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-bold text-white">Powered by Bright Data</div>
-              <div className="mt-0.5 text-xs text-white/70">Web data infrastructure for AI</div>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium text-white transition-colors group-hover:bg-white/25">
-              Learn more
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            </div>
-          </a>
-        </div>
+
 
         {/* Footer info */}
-        <div className="border-t border-th-border px-4 py-2 text-center text-xs leading-relaxed text-th-text-muted">
-          <div>{demoMode ? "Read-only demo" : `Local-first · ${workspaces.length} workspace${workspaces.length > 1 ? "s" : ""}`}</div>
-          <div className="mt-1">
-            Built by{" "}
-            <a
-              href="https://www.linkedin.com/in/daniel-shashko/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-th-text-accent hover:underline"
-            >
-              Daniel Shashko
-            </a>
+        <div className="border-t border-th-border px-4 py-3 space-y-2">
+          <div className="text-center text-xs leading-relaxed text-th-text-muted">
+            <div>{demoMode ? "Read-only demo" : `Local-first · ${workspaces.length} workspace${workspaces.length > 1 ? "s" : ""}`}</div>
           </div>
+          
+          {session && !demoMode && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-lg bg-th-card-alt p-2">
+                {session.user.image && (
+                  <img 
+                    src={session.user.image} 
+                    alt={session.user.name || "User"} 
+                    className="h-8 w-8 rounded-full"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  {session.user.name && (
+                    <div className="truncate text-xs font-medium text-th-text">
+                      {session.user.name}
+                    </div>
+                  )}
+                  <div className="truncate text-xs text-th-text-muted">
+                    {session.user.email}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+                className="w-full rounded-lg border border-th-border bg-th-card px-2 py-1.5 text-xs font-medium text-th-text hover:bg-th-card-hover transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -1542,10 +1368,13 @@ Now analyze all ${competitorList.length} competitors:`,
           </span>
         </header>
 
+        {/* Scrape progress indicator */}
+        <ScrapeProgressTracker progress={scrapeProgress} />
+
         {/* Scrollable body */}
         <main className="flex-1 overflow-y-auto bg-th-bg px-5 py-4">
-          {/* KPI strip */}
-          <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          {/* KPI strip — hidden on Settings */}
+          <section className={`mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6 ${activeTab === "Settings" ? "hidden" : ""}`}>
             <KpiCard label="Total Runs" value={state.runs.length} />
             <KpiCard
               label="Avg Visibility"
@@ -1563,7 +1392,7 @@ Now analyze all ${competitorList.length} competitors:`,
               value={state.runs.filter((r) => (r.brandMentions?.length ?? 0) > 0).length}
             />
             <KpiCard label="Captured Sources" value={totalSources} />
-            <KpiCard label="Citation Opps" value={citationOpportunities} />
+            <KpiCard label="Citation Opportunities" value={citationOpportunities} />
             <KpiCard
               label="Latest Run"
               value={
@@ -1575,8 +1404,13 @@ Now analyze all ${competitorList.length} competitors:`,
             />
           </section>
 
+          {/* Action Plan — insights & recommendations */}
+          {activeTab !== "Settings" && activeTab !== "Prompt Explorer" && (
+            <ActionInsights state={state} />
+          )}
+
           {/* ── Movers strip ── */}
-          {movers.length > 0 && (
+          {movers.length > 0 && activeTab !== "Settings" && (
             <section className="mb-4 rounded-xl border border-th-border bg-th-card p-4">
               <div className="mb-3 flex items-center gap-2">
                 <span className="text-base">📊</span>
@@ -1614,7 +1448,7 @@ Now analyze all ${competitorList.length} competitors:`,
           )}
 
           {/* Scoring explanation */}
-          {showScoreInfo && (
+          {showScoreInfo && activeTab !== "Settings" && (
             <section className="mb-4 rounded-xl border border-th-border bg-th-card p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold text-th-text">How Visibility Scoring Works</h3>
@@ -1641,42 +1475,6 @@ Now analyze all ${competitorList.length} competitors:`,
             <p className="mt-1 text-sm leading-relaxed text-th-text-secondary">{tabMeta[activeTab].details}</p>
           </section>
         </main>
-      </div>
-    </div>
-  );
-}
-
-/* ── Score Factor Card ────────────────────────────────────────── */
-function ScoreFactorCard({ emoji, label, points, desc }: { emoji: string; label: string; points: string; desc: string }) {
-  return (
-    <div className="rounded-lg border border-th-border bg-th-card-alt px-3 py-2.5">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-base">{emoji}</span>
-        <span className="text-sm font-medium text-th-text">{label}</span>
-        <span className="ml-auto text-sm font-semibold text-th-accent">{points}</span>
-      </div>
-      <p className="text-xs text-th-text-muted leading-relaxed">{desc}</p>
-    </div>
-  );
-}
-
-/* ── Compact KPI Card ─────────────────────────────────────────── */
-function KpiCard({ label, value, small, delta, onInfoClick }: { label: string; value: string | number; small?: boolean; delta?: number | null; onInfoClick?: () => void }) {
-  return (
-    <div className="rounded-xl border border-th-border bg-th-card px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-1">
-        <div className="text-xs font-medium uppercase tracking-wider text-th-text-muted">{label}</div>
-        {onInfoClick && (
-          <button onClick={onInfoClick} className="text-th-text-muted hover:text-th-text-accent text-xs" title="How is this calculated?">ⓘ</button>
-        )}
-      </div>
-      <div className={`mt-1 flex items-center gap-1.5 font-semibold text-th-text ${small ? "text-base" : "text-xl"}`}>
-        {value}
-        {delta != null && delta !== 0 && (
-          <span className={`text-xs font-bold ${delta > 0 ? "text-th-success" : "text-th-danger"}`}>
-            {delta > 0 ? "↑" : "↓"}{Math.abs(delta)}
-          </span>
-        )}
       </div>
     </div>
   );
