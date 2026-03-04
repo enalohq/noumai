@@ -10,7 +10,7 @@
  * Twitter extraction patterns
  */
 const TWITTER_PATTERNS = [
-  // twitter:site meta tag
+  // twitter:site meta tag (most reliable)
   {
     type: 'meta',
     selector: 'twitter:site',
@@ -21,7 +21,8 @@ const TWITTER_PATTERNS = [
         .replace(/^\//, '')
         .trim()
         .toLowerCase();
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      // Reject single characters and ensure it's a valid handle
+      return /^[a-z0-9_]{2,15}$/.test(cleaned) ? cleaned : null;
     }
   },
   // twitter:site content with @ symbol
@@ -33,27 +34,33 @@ const TWITTER_PATTERNS = [
         .replace(/^@/, '')
         .trim()
         .toLowerCase();
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      // Reject single characters
+      return /^[a-z0-9_]{2,15}$/.test(cleaned) ? cleaned : null;
     }
   },
-  // Anchor tags with Twitter URLs (twitter.com and x.com)
+  // Anchor tags with Twitter URLs - specific pattern for full handle URLs
   {
     type: 'link',
-    pattern: /<a\s+[^>]*href=["'](https?:\/\/(?:www\.)?(?:twitter|x)\.com\/[@]?([^"'\/\s]+))["'][^>]*>/gi,
+    pattern: /<a\s+[^>]*href=["'](https?:\/\/(?:www\.)?(?:twitter|x)\.com\/@?([a-zA-Z0-9_]+))["'][^>]*>/gi,
     extract: (match: RegExpExecArray) => {
-      const handle = (match[1] || match[0]).toLowerCase();
-      const cleaned = handle.replace(/^@/, '').split(/[\s#?]/)[0];
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      // match[1] = full URL, match[2] = handle
+      const handle = match[2]?.toLowerCase();
+      if (handle && handle.length >= 2 && handle.length <= 15) {
+        return handle;
+      }
+      return null;
     }
   },
   // Anchor tags with rel="me" and Twitter URL
   {
     type: 'link',
-    pattern: /<a\s+[^>]*rel=["']me["'][^>]*href=["']([^"']*(?:twitter|x)\.com\/[@]?([^"'\/\s]+))["'][^>]*>/gi,
+    pattern: /<a\s+[^>]*rel=["']me["'][^>]*href=["']([^"']*(?:twitter|x)\.com\/[@]?([a-zA-Z0-9_]+))["'][^>]*>/gi,
     extract: (match: RegExpExecArray) => {
-      const handle = (match[2] || match[1]).toLowerCase();
-      const cleaned = handle.replace(/^@/, '').split(/[\s#?]/)[0];
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      const handle = match[2]?.toLowerCase();
+      if (handle && handle.length >= 2) {
+        return handle;
+      }
+      return null;
     }
   },
   // data-twitter attribute
@@ -62,43 +69,56 @@ const TWITTER_PATTERNS = [
     pattern: /data-twitter=["']([^"'\s]+)["']/gi,
     extract: (match: RegExpExecArray) => {
       const cleaned = match[1].toLowerCase().replace(/^@/, '');
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      return /^[a-z0-9_]{2,15}$/.test(cleaned) ? cleaned : null;
     }
   },
-  // aria-label containing Twitter
+  // aria-label containing Twitter handle
   {
     type: 'aria',
-    pattern: /aria-label=["'][^"']*(?:twitter|x)[^"']*[@]?([^"'\s,]+)[^"']*["']/gi,
+    pattern: /aria-label=["']([^"']*(?:twitter|x)[^"']*[@]?([a-zA-Z0-9_]+)[^"']*)["']/gi,
     extract: (match: RegExpExecArray) => {
-      const cleaned = match[1].toLowerCase().replace(/^@/, '');
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      const handle = match[2]?.toLowerCase();
+      if (handle && handle.length >= 2) {
+        return handle;
+      }
+      return null;
     }
   },
-  // Text content patterns for twitter.com and x.com
-  {
-    type: 'text',
-    pattern: /(?:twitter|x)\.com\/[@]?([a-z0-9_]+)/gi,
-    extract: (match: RegExpExecArray) => {
-      const cleaned = match[1].toLowerCase();
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
-    }
-  },
-  // Amazon-specific: Follow us on Twitter text links
-  {
-    type: 'text',
-    pattern: /follow\s+us?\s+(?:on\s+)?(?:twitter|x)\s*[@]?([a-z0-9_]+)/gi,
-    extract: (match: RegExpExecArray) => {
-      const cleaned = match[1].toLowerCase();
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
-    }
-  },
-  // Amazon-specific: Twitter handle in social links section
+  // Amazon-specific: Twitter handle in social links section with title/aria-label
   {
     type: 'link',
-    pattern: /<a[^>]*href=["'][^"']*(?:twitter|x)\.com\/([^"'\/\s@]+)["'][^>]*>(?:[^<]*twitter[^<]*|<[^>]*>)/gi,
+    pattern: /<a[^>]*href=["'](?:https?:\/\/)?(?:www\.)?(?:twitter|x)\.com\/([a-zA-Z0-9_]+)["'][^>]*>(?:[^<]*(?:follow|twitter|amazon)[^<]*|<[^>]*>)/gi,
     extract: (match: RegExpExecArray) => {
-      const cleaned = match[1].toLowerCase().replace(/^@/, '').split(/[\s#?]/)[0];
-      return /^[a-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+      const handle = match[1]?.toLowerCase();
+      // Validate: Twitter handles are 2-15 alphanumeric characters and underscores only
+      if (handle && /^[a-z0-9_]{2,15}$/.test(handle)) {
+        return handle;
+      }
+      return null;
+    }
+  },
+  // Amazon-specific: Follow us on Twitter text
+  {
+    type: 'text',
+    pattern: /follow\s+us?\s+(?:on\s+)?(?:twitter|x)\.com\/[@]?([a-zA-Z0-9_]+)/gi,
+    extract: (match: RegExpExecArray) => {
+      const handle = match[1]?.toLowerCase();
+      if (handle && handle.length >= 2) {
+        return handle;
+      }
+      return null;
+    }
+  },
+  // Generic: Text content patterns for twitter.com and x.com URLs
+  {
+    type: 'text',
+    pattern: /(?:twitter|x)\.com\/([a-zA-Z0-9_]{2,15})(?:\/|$|\?|#)/gi,
+    extract: (match: RegExpExecArray) => {
+      const handle = match[1]?.toLowerCase();
+      if (handle && handle.length >= 2 && handle.length <= 15) {
+        return handle;
+      }
+      return null;
     }
   },
 ];
@@ -111,19 +131,40 @@ const LINKEDIN_PATTERNS = [
   {
     type: 'link',
     pattern: /<a\s+[^>]*href=["'](https?:\/\/(?:www\.)?linkedin\.com\/company\/([^"'\/\s]+))["'][^>]*>/gi,
-    extract: (match: RegExpExecArray) => match[1]
+    extract: (match: RegExpExecArray) => {
+      let url = match[1];
+      // Add www if missing
+      if (!url.includes('www.')) {
+        url = url.replace('https://', 'https://www.');
+      }
+      return url;
+    }
   },
   // Anchor tags with LinkedIn profile URLs
   {
     type: 'link',
     pattern: /<a\s+[^>]*href=["'](https?:\/\/(?:www\.)?linkedin\.com\/in\/([^"'\/\s]+))["'][^>]*>/gi,
-    extract: (match: RegExpExecArray) => match[1]
+    extract: (match: RegExpExecArray) => {
+      let url = match[1];
+      // Add www if missing
+      if (!url.includes('www.')) {
+        url = url.replace('https://', 'https://www.');
+      }
+      return url;
+    }
   },
   // data-linkedin attribute
   {
     type: 'data',
     pattern: /data-linkedin=["']([^"'\s]+)["']/gi,
-    extract: (match: RegExpExecArray) => match[1].trim()
+    extract: (match: RegExpExecArray) => {
+      let url = match[1].trim();
+      // Add www if missing
+      if (!url.includes('www.') && url.includes('linkedin.com')) {
+        url = url.replace('https://', 'https://www.');
+      }
+      return url;
+    }
   },
   // Text content patterns for company URLs
   {
