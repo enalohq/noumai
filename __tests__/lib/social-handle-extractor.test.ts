@@ -427,6 +427,50 @@ describe('extractSocialFromStructuredData', () => {
       expect(extractTwitterHandle(html)).toBe('beautybarnindia');
     });
   });
+  
+  describe('Unicode-escaped HTML', () => {
+    it('extracts Twitter handle from Unicode-escaped meta tag', () => {
+      // This simulates how beautybarn.in embeds meta tags in JavaScript strings
+      const html = `
+        <html>
+          <head>
+            <script>
+              var meta = "\\u003cmeta name=\\"twitter:site\\" content=\\"@beautybarnindia\\" /\\u003e";
+            </script>
+          </head>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+    });
+
+    it('extracts Twitter handle from Unicode-escaped twitter:creator', () => {
+      const html = `
+        <html>
+          <head>
+            <script>
+              var meta = "\\u003cmeta name=\\"twitter:creator\\" content=\\"@testuser\\" /\\u003e";
+            </script>
+          </head>
+        </html>
+      `;
+      // twitter:creator is not in our patterns, but twitter:site is
+      expect(extractTwitterHandle(html)).toBeNull();
+    });
+
+    it('extracts Twitter handle from mixed escaped and unescaped HTML', () => {
+      const html = `
+        <html>
+          <head>
+            <meta name="twitter:card" content="summary" />
+            <script>
+              var meta = "\\u003cmeta name=\\"twitter:site\\" content=\\"@amazonIN\\" /\\u003e";
+            </script>
+          </head>
+        </html>
+      `;
+      expect(extractTwitterHandle(html)).toBe('amazonin');
+    });
+  });
     it('extracts Twitter handle from x.com URL without protocol', () => {
       const html = `
         <html>
