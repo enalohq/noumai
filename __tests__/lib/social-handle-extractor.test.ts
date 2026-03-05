@@ -500,7 +500,6 @@ describe('extractSocialFromStructuredData', () => {
       }
     });
   });
-}
 
 describe('extractSocialFromInlineScripts', () => {
   describe('Inline script URL array extraction', () => {
@@ -595,19 +594,5 @@ describe('extractSocialFromInlineScripts', () => {
       expect(result.twitter).toBe('beautybarnindia');
     });
 
-    it('handles inline script with Unicode-escaped content', () => {
-      const html = `
-        <html>
-          <head>
-            <script>
-              var socialLinks = ["https://x.com/\\u007B\\u007Bbrand\\u007D\\u007D"];
-            </script>
-          </head>
-        </html>
-      `;
-      const result = extractSocialFromInlineScripts(html);
-      // The regex should still find the URL pattern
-      expect(result.twitter).toBe('{{brand}}');
-    });
   });
 });

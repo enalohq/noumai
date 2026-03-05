@@ -91,10 +91,15 @@ export function OnboardingWizard() {
     setSaving(true);
     setError("");
     try {
+      // For step 2, include brand context for auto-fill
+      const payloadWithBrand = step === 2
+        ? { ...payload, brandName: state.brand.brandName, brandAliases: state.brand.brandAliases }
+        : payload;
+      
       const res = await fetch("/api/onboarding", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step, ...payload }),
+        body: JSON.stringify({ step, ...payloadWithBrand }),
       });
       if (res.status === 401) {
         signOut({ callbackUrl: "/auth/signin" });
@@ -137,6 +142,41 @@ export function OnboardingWizard() {
         await saveStep(1, state.brand);
         showToast("Step 1 completed! Moving to market details.", "success");
         setCurrentStep(2);
+        
+        // Auto-fill industry and description if empty
+        if (!state.market.industry || !state.market.brandDescription) {
+          try {
+            const res = await fetch("/api/onboarding", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                step: 2,
+                industry: state.market.industry || undefined,
+                brandDescription: state.market.brandDescription || undefined,
+                brandName: state.brand.brandName,
+                brandAliases: state.brand.brandAliases,
+              }),
+            });
+            
+            if (res.ok) {
+              // Fetch the updated data
+              const onboardingRes = await fetch("/api/onboarding");
+              const data = await onboardingRes.json();
+              if (data.workspace) {
+                setState((s) => ({
+                  ...s,
+                  market: {
+                    industry: data.workspace.industry || s.market.industry,
+                    brandDescription: data.workspace.brandDescription || s.market.brandDescription,
+                  },
+                }));
+              }
+            }
+          } catch (error) {
+            console.error("Auto-fill error:", error);
+            // Continue even if auto-fill fails
+          }
+        }
       } else if (currentStep === 2) {
         if (!state.market.industry || !state.market.brandDescription.trim()) {
           setError("Industry and brand description are required.");

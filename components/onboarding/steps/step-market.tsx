@@ -1,27 +1,11 @@
 "use client";
 
+import { INDUSTRIES } from "@/lib/constants/industries";
+
 export interface MarketData {
   industry: string;
   brandDescription: string;
 }
-
-const INDUSTRIES = [
-  "SaaS / Software",
-  "E-commerce / Retail",
-  "FinTech / Finance",
-  "HealthTech / Healthcare",
-  "EdTech / Education",
-  "Marketing / Advertising",
-  "Legal / Compliance",
-  "Real Estate",
-  "Travel / Hospitality",
-  "Media / Publishing",
-  "Consulting / Professional Services",
-  "Manufacturing / Industrial",
-  "Non-profit / NGO",
-  "Government / Public Sector",
-  "Other",
-];
 
 interface StepMarketProps {
   data: MarketData;
@@ -49,6 +33,9 @@ export function StepMarket({ data, onChange }: StepMarketProps) {
             </option>
           ))}
         </select>
+        <p className="mt-1 text-xs text-th-text-muted">
+          We can auto-detect this from your brand name
+        </p>
       </div>
 
       <div>

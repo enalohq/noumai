@@ -233,8 +233,10 @@ const LINKEDIN_PATTERNS = [
  */
 export function decodeUnicodeEscapes(html: string): string {
   return html
-    .replace(/\\u003c/g, '<')
-    .replace(/\\u003e/g, '>')
+    .replace(/\\u003c/gi, '<')
+    .replace(/\\u003e/gi, '>')
+    .replace(/\\u007b/gi, '{')
+    .replace(/\\u007d/gi, '}')
     .replace(/\\"/g, '"')
     .replace(/\\'/g, "'")
     .replace(/\\n/g, '\n')

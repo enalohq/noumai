@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateStarterPrompts } from "@/lib/onboarding/generate-prompts";
+import { autoFillMarket } from "@/lib/onboarding/auto-fill-market";
 
 /**
  * GET /api/onboarding — Onboarding always uses primary workspace.
@@ -161,12 +162,23 @@ export async function PATCH(request: NextRequest) {
     await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 1 } });
 
   } else if (step === 2) {
-    const { industry, brandDescription } = body;
+    const { industry, brandDescription, brandName, brandAliases } = body;
+    
+    // Auto-fill industry and description with a single LLM call if not provided
+    let finalIndustry = industry;
+    let finalDescription = brandDescription;
+    
+    if ((!industry || !brandDescription) && brandName) {
+      const filled = await autoFillMarket({ brandName, brandAliases });
+      finalIndustry = filled.industry;
+      finalDescription = filled.description;
+    }
+    
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
-        industry: industry ?? undefined,
-        brandDescription: brandDescription ?? undefined,
+        industry: finalIndustry ?? undefined,
+        brandDescription: finalDescription ?? undefined,
       },
     });
     await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 2 } });
