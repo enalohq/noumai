@@ -7,6 +7,7 @@ import {
   extractTwitterHandle,
   extractLinkedinUrl,
 } from "@/lib/brand/social-handle-extractor";
+import { extractCountry } from "@/lib/utils/country-detector";
 
 // Lazy initialization of provider chain
 let brandNameProviderChain: BrandNameProviderChain | null = null;
@@ -356,10 +357,14 @@ export async function GET(request: NextRequest) {
     const twitterHandle = providerData.twitterHandle;
     const linkedinHandle = providerData.linkedinHandle;
 
+    // Extract country from domain or website content
+    const country = extractCountry(fetchUrl.hostname, html);
+
     const metadata = {
       brandName: brandName || "",
       twitterHandle: twitterHandle || "",
       linkedinHandle: linkedinHandle || "",
+      country: country || "",
       url: fetchUrl.toString(),
     };
 

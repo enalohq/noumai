@@ -35,6 +35,7 @@ export async function GET() {
               website: true,
               twitterHandle: true,
               linkedinHandle: true,
+              country: true,
               industry: true,
               brandDescription: true,
               targetKeywords: true,
@@ -91,6 +92,7 @@ export async function GET() {
           website: workspace.website ?? "",
           twitterHandle: workspace.twitterHandle ?? "",
           linkedinHandle: workspace.linkedinHandle ?? "",
+          country: workspace.country ?? "",
           industry: workspace.industry ?? "",
           brandDescription: workspace.brandDescription ?? "",
           targetKeywords: workspace.targetKeywords ?? "",
@@ -148,7 +150,7 @@ export async function PATCH(request: NextRequest) {
   const { step } = body;
 
   if (step === 1) {
-    const { brandName, brandAliases, website, twitterHandle, linkedinHandle } = body;
+    const { brandName, brandAliases, website, twitterHandle, linkedinHandle, country } = body;
     await prisma.workspace.update({
       where: { id: workspaceId },
       data: {
@@ -157,6 +159,7 @@ export async function PATCH(request: NextRequest) {
         website: website ?? undefined,
         twitterHandle: twitterHandle ?? undefined,
         linkedinHandle: linkedinHandle ?? undefined,
+        country: country ?? undefined,
       },
     });
     await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 1 } });

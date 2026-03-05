@@ -89,6 +89,7 @@ model Workspace {
   website          String?
   twitterHandle    String?
   linkedinHandle   String?
+  country          String?
   industry         String?
   brandDescription String?
   targetKeywords   String?

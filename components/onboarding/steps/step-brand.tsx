@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { searchCountries, findCountry, type CountryOption } from "@/lib/constants/countries";
+import { generateAliasExamples } from "./brand-utils";
 
 export interface BrandData {
   brandName: string;
@@ -8,6 +10,7 @@ export interface BrandData {
   website: string;
   twitterHandle: string;
   linkedinHandle: string;
+  country: string;
 }
 
 interface StepBrandProps {
@@ -23,6 +26,11 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchSuccess, setFetchSuccess] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+  const [isCountryAutoDetected, setIsCountryAutoDetected] = useState(false);
+  const countryInputRef = useRef<HTMLInputElement>(null);
+  const countryDropdownRef = useRef<HTMLDivElement>(null);
   
   // Track last fetched URL to prevent duplicate calls
   const lastFetchedUrl = useRef<string | null>(null);
@@ -94,7 +102,18 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
             autoFilled.push("LinkedIn URL");
           }
         }
-        
+
+        // Auto-fill country if available
+        if (metadata.country && !current.country) {
+          const foundCountry = findCountry(metadata.country);
+          if (foundCountry) {
+            newData.country = foundCountry.name;
+            setCountrySearch(foundCountry.name);
+            setIsCountryAutoDetected(true);
+            autoFilled.push("country");
+          }
+        }
+
         onChange(newData);
         
         // Mark this URL as successfully fetched
@@ -150,49 +169,71 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
       userEditedTwitterHandle.current = true;
     } else if (field === "linkedinHandle") {
       userEditedLinkedinHandle.current = true;
+    } else if (field === "country") {
+      // Handle country input for search
+      const value = e.target.value;
+      setCountrySearch(value);
+      setIsCountryAutoDetected(false);
+      
+      // Show dropdown if there's text
+      if (value.trim()) {
+        setShowCountryDropdown(true);
+      } else {
+        setShowCountryDropdown(false);
+      }
+      
+      // If it matches a country exactly, select it
+      const foundCountry = findCountry(value);
+      if (foundCountry) {
+        onChange({ ...data, country: foundCountry.name });
+        setCountrySearch(foundCountry.name);
+        setShowCountryDropdown(false);
+      } else {
+        onChange({ ...data, country: value });
+      }
+      return;
     }
     onChange({ ...data, [field]: e.target.value });
   };
 
-  // Helper to generate alias examples
-  const generateAliasExamples = (name: string): string => {
-    if (!name.trim()) return "";
-    
-    const examples: string[] = [];
-    
-    // Remove common suffixes
-    const baseName = name
-      .replace(/\s+(Inc|Corp|Corporation|LLC|Ltd|Co|Company)[.]?$/i, "")
-      .trim();
-    
-    if (baseName !== name && baseName.length > 0) {
-      examples.push(baseName);
-    }
-    
-    // Add common variations
-    if (name.includes(" ")) {
-      const initials = name
-        .split(" ")
-        .map(word => word.charAt(0))
-        .join("");
-      if (initials.length > 1) {
-        examples.push(initials);
-      }
-      
-      const firstWord = name.split(" ")[0];
-      if (firstWord && firstWord.length > 2) {
-        examples.push(firstWord);
-      }
-    }
-    
-    // Add with common suffixes
-    if (!name.match(/\b(Inc|Corp|Corporation|LLC|Ltd|Co|Company)[.]?$/i)) {
-      examples.push(`${name} Inc`, `${name} Corp`);
-    }
-    
-    // Return first 3 examples
-    return examples.slice(0, 3).join(", ") + (examples.length > 3 ? ", ..." : "");
+  // Handle country selection from dropdown
+  const handleCountrySelect = (country: CountryOption) => {
+    onChange({ ...data, country: country.name });
+    setCountrySearch(country.name);
+    setShowCountryDropdown(false);
+    setIsCountryAutoDetected(false);
   };
+
+
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        countryDropdownRef.current && 
+        !countryDropdownRef.current.contains(event.target as Node) &&
+        countryInputRef.current && 
+        !countryInputRef.current.contains(event.target as Node)
+      ) {
+        setShowCountryDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Initialize country search with current country value
+  useEffect(() => {
+    if (data.country) {
+      setCountrySearch(data.country);
+    }
+  }, [data.country]);
+
+  // Get filtered countries for dropdown
+  const filteredCountries = searchCountries(countrySearch);
+
+
 
   return (
     <div className="space-y-5">
@@ -268,6 +309,70 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
             }
           </p>
         </div>
+
+        {/* Country */}
+        <div className="relative">
+          <div className="mb-1.5 flex items-center gap-1">
+            <label htmlFor="country" className="text-sm font-semibold text-th-text">
+              Country <span className="text-th-danger">*</span>
+            </label>
+            <button
+              type="button"
+              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-th-border text-xs text-th-text-muted hover:bg-th-border-dark"
+              aria-label="Why do we need country?"
+              // title="Helps us find local competitors and market trends"
+            >
+              ?
+            </button>
+            {isCountryAutoDetected && (
+              <span className="ml-2 text-xs font-normal text-green-600">
+                ✓ Auto-detected
+              </span>
+            )}
+          </div>
+          <div className="relative" ref={countryDropdownRef}>
+            <input
+              ref={countryInputRef}
+              id="country"
+              type="text"
+              value={countrySearch}
+              onChange={set("country")}
+              onFocus={() => setShowCountryDropdown(true)}
+              className="bd-input w-full rounded-lg p-2.5 text-sm"
+              placeholder="Type to search countries..."
+              required
+            />
+            {showCountryDropdown && (
+              <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-th-border bg-white shadow-lg">
+                {filteredCountries.length > 0 ? (
+                  filteredCountries.map((country) => (
+                    <button
+                      key={country.code}
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-100"
+                      onClick={() => handleCountrySelect(country)}
+                    >
+                      <span className="text-lg">{country.flag}</span>
+                      <span className="flex-1">{country.name}</span>
+                      {country.aliases.length > 0 && (
+                        <span className="text-xs text-gray-500">
+                          {country.aliases[0]}
+                        </span>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-gray-500">
+                    No countries found
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* <p className="mt-1 text-xs text-th-text-muted">
+            Helps us find local competitors and market trends
+          </p> */}
+        </div>
       </div>
 
       {/* Section 2: Brand Social Link */}
@@ -335,6 +440,8 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
                 Full LinkedIn company or profile URL
               </p>
             </div>
+
+
 
             {/* Brand Aliases */}
             <div>

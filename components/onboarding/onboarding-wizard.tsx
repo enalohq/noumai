@@ -25,7 +25,7 @@ interface OnboardingState {
 }
 
 const DEFAULT_STATE: OnboardingState = {
-  brand: { brandName: "", brandAliases: "", website: "", twitterHandle: "", linkedinHandle: "" },
+  brand: { brandName: "", brandAliases: "", website: "", twitterHandle: "", linkedinHandle: "", country: "" },
   market: { industry: "", brandDescription: "" },
   competitors: { targetKeywords: "", competitors: [] },
   prompts: { selectedPrompts: [] },
@@ -64,6 +64,7 @@ export function OnboardingWizard() {
               website: ws.website || "",
               twitterHandle: ws.twitterHandle || "",
               linkedinHandle: ws.linkedinHandle || "",
+              country: ws.country || "",
             },
             market: {
               industry: ws.industry || "",
