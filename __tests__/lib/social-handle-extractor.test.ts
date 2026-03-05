@@ -7,6 +7,7 @@ import {
   extractTwitterHandle,
   extractLinkedinUrl,
   extractSocialFromStructuredData,
+  extractSocialFromInlineScripts,
   decodeUnicodeEscapes,
 } from '@/lib/brand/social-handle-extractor';
 
@@ -499,13 +500,114 @@ describe('extractSocialFromStructuredData', () => {
       }
     });
   });
-    it('extracts Twitter handle from x.com URL without protocol', () => {
+}
+
+describe('extractSocialFromInlineScripts', () => {
+  describe('Inline script URL array extraction', () => {
+    it('extracts Twitter handle from inline script with social URLs (beautybarn.in pattern)', () => {
+      // This simulates how beautybarn.in embeds social links in regular script tags
       const html = `
         <html>
-          <body>
-            <a href="x.com/beautybarnindia">Follow us</a>
-          </body>
+          <head>
+            <script>
+              var socialLinks = ["https://x.com/beautybarnindia", "https://www.instagram.com/beautybarnindia", "https://www.youtube.com/beautybarnindia"];
+            </script>
+          </head>
         </html>
       `;
-      expect(extractTwitterHandle(html)).toBe('beautybarnindia');
+      const result = extractSocialFromInlineScripts(html);
+      expect(result.twitter).toBe('beautybarnindia');
     });
+
+    it('extracts LinkedIn URL from inline script with social URLs', () => {
+      const html = `
+        <html>
+          <head>
+            <script>
+              var socialLinks = ["https://www.linkedin.com/company/amazon", "https://twitter.com/amazonIN"];
+            </script>
+          </head>
+        </html>
+      `;
+      const result = extractSocialFromInlineScripts(html);
+      expect(result.linkedin).toBe('https://www.linkedin.com/company/amazon');
+    });
+
+    it('extracts both Twitter and LinkedIn from inline script', () => {
+      const html = `
+        <html>
+          <head>
+            <script>
+              var socialLinks = ["https://x.com/beautybarnindia", "https://www.linkedin.com/company/beautybarn"];
+            </script>
+          </head>
+        </html>
+      `;
+      const result = extractSocialFromInlineScripts(html);
+      expect(result.twitter).toBe('beautybarnindia');
+      expect(result.linkedin).toBe('https://www.linkedin.com/company/beautybarn');
+    });
+
+    it('extracts Twitter handle from inline script with twitter.com URL', () => {
+      const html = `
+        <html>
+          <head>
+            <script>
+              var social = ["https://twitter.com/amazonIN", "https://www.instagram.com/amazon"];
+            </script>
+          </head>
+        </html>
+      `;
+      const result = extractSocialFromInlineScripts(html);
+      expect(result.twitter).toBe('amazonin');
+    });
+
+    it('returns empty object for HTML without inline script social URLs', () => {
+      const html = `
+        <html>
+          <head>
+            <script>
+              var data = { name: "Test", value: 123 };
+            </script>
+          </head>
+        </html>
+      `;
+      expect(extractSocialFromInlineScripts(html)).toEqual({});
+    });
+
+    it('skips JSON-LD scripts and processes only regular scripts', () => {
+      const html = `
+        <html>
+          <head>
+            <script type="application/ld+json">
+              {
+                "@type": "Organization",
+                "sameAs": ["https://twitter.com/amazonIN"]
+              }
+            </script>
+            <script>
+              var socialLinks = ["https://x.com/beautybarnindia"];
+            </script>
+          </head>
+        </html>
+      `;
+      const result = extractSocialFromInlineScripts(html);
+      expect(result.twitter).toBe('beautybarnindia');
+    });
+
+    it('handles inline script with Unicode-escaped content', () => {
+      const html = `
+        <html>
+          <head>
+            <script>
+              var socialLinks = ["https://x.com/\\u007B\\u007Bbrand\\u007D\\u007D"];
+            </script>
+          </head>
+        </html>
+      `;
+      const result = extractSocialFromInlineScripts(html);
+      // The regex should still find the URL pattern
+      expect(result.twitter).toBe('{{brand}}');
+    });
+  });
+});

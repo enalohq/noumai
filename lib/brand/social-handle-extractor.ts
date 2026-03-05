@@ -364,3 +364,68 @@ export function extractSocialFromStructuredData(html: string): { twitter?: strin
   
   return result;
 }
+
+/**
+ * Extract social handles from inline JavaScript data (not JSON-LD)
+ * Some sites embed social links in regular script tags with JSON arrays
+ * Example: ["https://x.com/beautybarnindia", "https://instagram.com/...", ...]
+ */
+export function extractSocialFromInlineScripts(html: string): { twitter?: string; linkedin?: string } {
+  const result: { twitter?: string; linkedin?: string } = {};
+  
+  // Decode Unicode escapes first
+  const decodedHtml = decodeUnicodeEscapes(html);
+  
+  // Match regular script tags containing social media URLs
+  // Pattern: <script>...["https://x.com/handle", "https://instagram.com/..."...]...</script>
+  const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  
+  while ((match = scriptRegex.exec(decodedHtml)) !== null) {
+    const scriptContent = match[1];
+    
+    // Skip if it's a JSON-LD script (already handled by extractSocialFromStructuredData)
+    if (scriptContent.includes('application/ld+json') || scriptContent.includes('@type')) {
+      continue;
+    }
+    
+    // Look for arrays of URLs containing social media links
+    // Pattern: ["https://x.com/handle", "https://instagram.com/...", ...]
+    const urlArrayRegex = /\["([^"\]]*(?:twitter\.com|x\.com|linkedin\.com|instagram\.com|youtube\.com|facebook\.com)[^"\]]*)"\]/gi;
+    let urlMatch;
+    
+    while ((urlMatch = urlArrayRegex.exec(scriptContent)) !== null) {
+      const urls = urlMatch[1].split('","');
+      
+      for (const url of urls) {
+        const cleanUrl = url.trim();
+        
+        // Extract Twitter/X handle
+        if (!result.twitter && (cleanUrl.includes('twitter.com/') || cleanUrl.includes('x.com/'))) {
+          const twitterMatch = cleanUrl.match(/(?:twitter|x)\.com\/[@]?([a-z0-9_]+)/i);
+          if (twitterMatch) {
+            result.twitter = twitterMatch[1].toLowerCase();
+            if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+              console.log('[extractSocialFromInlineScripts] Extracted Twitter handle:', result.twitter);
+            }
+          }
+        }
+        
+        // Extract LinkedIn URL
+        if (!result.linkedin && (cleanUrl.includes('linkedin.com/company/') || cleanUrl.includes('linkedin.com/in/'))) {
+          result.linkedin = cleanUrl;
+          if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+            console.log('[extractSocialFromInlineScripts] Extracted LinkedIn URL:', result.linkedin);
+          }
+        }
+        
+        // Early exit if we have both
+        if (result.twitter && result.linkedin) {
+          return result;
+        }
+      }
+    }
+  }
+  
+  return result;
+}

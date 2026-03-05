@@ -29,6 +29,7 @@ import {
   extractTwitterHandle,
   extractLinkedinUrl,
   extractSocialFromStructuredData,
+  extractSocialFromInlineScripts,
 } from './social-handle-extractor';
 
 /**
@@ -86,7 +87,21 @@ export class HtmlScrapingProvider implements BrandNameProvider {
       console.log('[HtmlScrapingProvider] Structured data extraction:', structuredData);
     }
     
-    // Fallback to HTML extraction if not found in structured data
+    // Fallback to inline script extraction (e.g., beautybarn.in embeds social links in regular script tags)
+    if (!twitterHandle || !linkedinHandle) {
+      const inlineData = extractSocialFromInlineScripts(html);
+      if (!twitterHandle && inlineData.twitter) {
+        twitterHandle = inlineData.twitter;
+      }
+      if (!linkedinHandle && inlineData.linkedin) {
+        linkedinHandle = inlineData.linkedin;
+      }
+      if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
+        console.log('[HtmlScrapingProvider] Inline script extraction:', { twitter: inlineData.twitter, linkedin: inlineData.linkedin });
+      }
+    }
+    
+    // Fallback to HTML extraction if not found in structured data or inline scripts
     if (!twitterHandle) {
       twitterHandle = extractTwitterHandle(html);
       if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
