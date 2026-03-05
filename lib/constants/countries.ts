@@ -212,11 +212,13 @@ export const COUNTRIES: CountryOption[] = [
 ];
 
 /**
- * Find country by name or alias
+ * Find country by name or alias (exact match, case-insensitive)
+ * For auto-selection when user types exact country name
  */
 export function findCountry(query: string): CountryOption | undefined {
   const normalizedQuery = query.toLowerCase().trim();
   
+  // First try exact matches (for auto-selection)
   return COUNTRIES.find(country => 
     country.name.toLowerCase() === normalizedQuery ||
     country.aliases.some(alias => alias.toLowerCase() === normalizedQuery) ||
@@ -225,7 +227,7 @@ export function findCountry(query: string): CountryOption | undefined {
 }
 
 /**
- * Search countries by query (name, alias, or code)
+ * Search countries by query (name, alias, or code) - case-insensitive with partial matching
  */
 export function searchCountries(query: string): CountryOption[] {
   if (!query.trim()) return COUNTRIES;
@@ -233,9 +235,12 @@ export function searchCountries(query: string): CountryOption[] {
   const normalizedQuery = query.toLowerCase().trim();
   
   return COUNTRIES.filter(country => 
+    // Case-insensitive partial match on name
     country.name.toLowerCase().includes(normalizedQuery) ||
+    // Case-insensitive partial match on any alias
     country.aliases.some(alias => alias.toLowerCase().includes(normalizedQuery)) ||
-    country.code.toLowerCase().includes(normalizedQuery)
+    // Case-insensitive exact match on code
+    country.code.toLowerCase() === normalizedQuery
   );
 }
 

@@ -26,7 +26,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchSuccess, setFetchSuccess] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [countrySearch, setCountrySearch] = useState("");
+  const [countryDisplay, setCountryDisplay] = useState("");
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [isCountryAutoDetected, setIsCountryAutoDetected] = useState(false);
   const countryInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +108,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
           const foundCountry = findCountry(metadata.country);
           if (foundCountry) {
             newData.country = foundCountry.name;
-            setCountrySearch(foundCountry.name);
+            setCountryDisplay(`${foundCountry.flag} ${foundCountry.name}`);
             setIsCountryAutoDetected(true);
             autoFilled.push("country");
           }
@@ -172,7 +172,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
     } else if (field === "country") {
       // Handle country input for search
       const value = e.target.value;
-      setCountrySearch(value);
+      setCountryDisplay(value);
       setIsCountryAutoDetected(false);
       
       // Show dropdown if there's text
@@ -182,11 +182,11 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
         setShowCountryDropdown(false);
       }
       
-      // If it matches a country exactly, select it
+      // If it matches a country exactly, select it with flag
       const foundCountry = findCountry(value);
       if (foundCountry) {
         onChange({ ...data, country: foundCountry.name });
-        setCountrySearch(foundCountry.name);
+        setCountryDisplay(`${foundCountry.flag} ${foundCountry.name}`);
         setShowCountryDropdown(false);
       } else {
         onChange({ ...data, country: value });
@@ -199,7 +199,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   // Handle country selection from dropdown
   const handleCountrySelect = (country: CountryOption) => {
     onChange({ ...data, country: country.name });
-    setCountrySearch(country.name);
+    setCountryDisplay(`${country.flag} ${country.name}`);
     setShowCountryDropdown(false);
     setIsCountryAutoDetected(false);
   };
@@ -223,15 +223,36 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Initialize country search with current country value
+  // Initialize country display with current country value
   useEffect(() => {
     if (data.country) {
-      setCountrySearch(data.country);
+      const foundCountry = findCountry(data.country);
+      if (foundCountry) {
+        setCountryDisplay(`${foundCountry.flag} ${foundCountry.name}`);
+      } else {
+        setCountryDisplay(data.country);
+      }
     }
   }, [data.country]);
 
   // Get filtered countries for dropdown
-  const filteredCountries = searchCountries(countrySearch);
+  const getSearchText = (display: string): string => {
+    if (!display.trim()) return "";
+    
+    // Simple approach: if display starts with flag emoji pattern, remove it
+    // Flag emojis are typically 2 characters followed by a space
+    const text = display.trim();
+    
+    // Check for common flag emoji patterns at the start
+    if (text.length > 2 && text.charAt(2) === ' ') {
+      // Might be a flag emoji (2 chars) followed by space
+      return text.substring(3).trim();
+    }
+    
+    return text;
+  };
+  
+  const filteredCountries = searchCountries(getSearchText(countryDisplay));
 
 
 
@@ -324,18 +345,18 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
             >
               ?
             </button>
-            {isCountryAutoDetected && (
+            {/* {isCountryAutoDetected && (
               <span className="ml-2 text-xs font-normal text-green-600">
                 ✓ Auto-detected
               </span>
-            )}
+            )} */}
           </div>
           <div className="relative" ref={countryDropdownRef}>
             <input
               ref={countryInputRef}
               id="country"
               type="text"
-              value={countrySearch}
+              value={countryDisplay}
               onChange={set("country")}
               onFocus={() => setShowCountryDropdown(true)}
               className="bd-input w-full rounded-lg p-2.5 text-sm"
