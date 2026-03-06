@@ -362,6 +362,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
               className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-th-border text-xs text-th-text-muted hover:bg-th-border-dark"
               aria-label="Why do we need country?"
               // title="Helps us find local competitors and market trends"
+              title="Your coutry of operation"
             >
               ?
             </button>
