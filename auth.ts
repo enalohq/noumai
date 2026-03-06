@@ -111,7 +111,7 @@ const config: NextAuthConfig = {
       }
 
       // Scenario 2: Credentials account linking (OAuth → Email/Password)
-      if (account?.provider === "credentials" && user?.email) {
+      if (account?.provider === "credentials" && user?.email && user?.id) {
         try {
           const result = await accountLinkingService.linkCredentialsAccount(user.email, user.id);
           
