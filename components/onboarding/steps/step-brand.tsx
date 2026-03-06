@@ -3,6 +3,35 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { searchCountries, findCountry, type CountryOption } from "@/lib/constants/countries";
 import { generateAliasExamples } from "./brand-utils";
+import * as Flags from "country-flag-icons/react/3x2";
+
+// Helper component to render country flag dynamically
+interface FlagProps {
+  countryCode: string;
+  className?: string;
+}
+
+function CountryFlag({ countryCode, className = "" }: FlagProps) {
+  // Convert country code to the format used in the package (e.g., "US" -> "US", "GB" -> "GB")
+  // Some codes might need transformation (e.g., "GB-ENG" -> "GB_ENG")
+  const normalizedCode = countryCode.toUpperCase().replace(/-/g, "_");
+  
+  // Try to get the flag component dynamically
+  // Type assertion to access dynamic property
+  type FlagComponentType = React.ComponentType<{ className?: string }>;
+  const FlagComponent = (Flags as Record<string, FlagComponentType>)[normalizedCode];
+  
+  if (!FlagComponent) {
+    // Fallback: return a placeholder
+    return (
+      <div className={`flex h-5 w-7 items-center justify-center rounded border border-gray-200 bg-gray-100 ${className}`}>
+        <span className="text-xs text-gray-500">{countryCode}</span>
+      </div>
+    );
+  }
+
+  return <FlagComponent className={`h-4 w-6 object-cover ${className}`} />;
+}
 
 export interface BrandData {
   brandName: string;
@@ -108,7 +137,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
           const foundCountry = findCountry(metadata.country);
           if (foundCountry) {
             newData.country = foundCountry.name;
-            setCountryDisplay(`${foundCountry.flag} ${foundCountry.name}`);
+            setCountryDisplay(foundCountry.name);
             setIsCountryAutoDetected(true);
             autoFilled.push("country");
           }
@@ -182,11 +211,11 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
         setShowCountryDropdown(false);
       }
       
-      // If it matches a country exactly, select it with flag
+      // If it matches a country exactly, select it
       const foundCountry = findCountry(value);
       if (foundCountry) {
         onChange({ ...data, country: foundCountry.name });
-        setCountryDisplay(`${foundCountry.flag} ${foundCountry.name}`);
+        setCountryDisplay(foundCountry.name);
         setShowCountryDropdown(false);
       } else {
         onChange({ ...data, country: value });
@@ -199,7 +228,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   // Handle country selection from dropdown
   const handleCountrySelect = (country: CountryOption) => {
     onChange({ ...data, country: country.name });
-    setCountryDisplay(`${country.flag} ${country.name}`);
+    setCountryDisplay(country.name);
     setShowCountryDropdown(false);
     setIsCountryAutoDetected(false);
   };
@@ -228,7 +257,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
     if (data.country) {
       const foundCountry = findCountry(data.country);
       if (foundCountry) {
-        setCountryDisplay(`${foundCountry.flag} ${foundCountry.name}`);
+        setCountryDisplay(foundCountry.name);
       } else {
         setCountryDisplay(data.country);
       }
@@ -239,17 +268,8 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   const getSearchText = (display: string): string => {
     if (!display.trim()) return "";
     
-    // Simple approach: if display starts with flag emoji pattern, remove it
-    // Flag emojis are typically 2 characters followed by a space
-    const text = display.trim();
-    
-    // Check for common flag emoji patterns at the start
-    if (text.length > 2 && text.charAt(2) === ' ') {
-      // Might be a flag emoji (2 chars) followed by space
-      return text.substring(3).trim();
-    }
-    
-    return text;
+    // We're not showing flag emojis in the input, so just return the text
+    return display.trim();
   };
   
   const filteredCountries = searchCountries(getSearchText(countryDisplay));
@@ -352,6 +372,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
             )} */}
           </div>
           <div className="relative" ref={countryDropdownRef}>
+            <div className="relative">
             <input
               ref={countryInputRef}
               id="country"
@@ -359,10 +380,19 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
               value={countryDisplay}
               onChange={set("country")}
               onFocus={() => setShowCountryDropdown(true)}
-              className="bd-input w-full rounded-lg p-2.5 text-sm"
+                className="bd-input w-full rounded-lg py-2.5 pl-10 pr-2.5 text-sm"
               placeholder="Type to search countries..."
               required
             />
+              {data.country && (
+                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                  <CountryFlag 
+                    countryCode={findCountry(data.country)?.code || data.country.slice(0, 2).toUpperCase()} 
+                    className="h-4 w-6"
+                  />
+                </div>
+              )}
+            </div>
             {showCountryDropdown && (
               <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-th-border bg-white shadow-lg">
                 {filteredCountries.length > 0 ? (
@@ -373,9 +403,11 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
                       className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-100"
                       onClick={() => handleCountrySelect(country)}
                     >
-                      <span className="text-lg">{country.flag}</span>
+                      <div className="flex h-5 w-7 items-center justify-center overflow-hidden rounded border border-gray-200">
+                        <CountryFlag countryCode={country.code} className="h-4 w-6 object-cover" />
+                      </div>
                       <span className="flex-1">{country.name}</span>
-                      {country.aliases.length > 0 && (
+                      {country.aliases.length > 0 && country.aliases[0] !== country.code && (
                         <span className="text-xs text-gray-500">
                           {country.aliases[0]}
                         </span>
@@ -390,9 +422,9 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
               </div>
             )}
           </div>
-          {/* <p className="mt-1 text-xs text-th-text-muted">
-            Helps us find local competitors and market trends
-          </p> */}
+          <p className="mt-1 text-xs text-th-text-muted">
+            Helps us find your competitors and market trends
+          </p>
         </div>
       </div>
 

@@ -22,6 +22,7 @@ const StepBrandTestWrapper: React.FC<{
       website: '',
       twitterHandle: '',
       linkedinHandle: '',
+      country: '',
     }
   );
 
@@ -36,6 +37,7 @@ describe('StepBrand Component', () => {
     website: '',
     twitterHandle: '',
     linkedinHandle: '',
+    country: '',
   } as BrandData;
 
   // Default props for tests that need direct StepBrand usage
@@ -74,6 +76,7 @@ describe('StepBrand Component', () => {
           website: 'https://test.com',
           twitterHandle: 'testuser',
           linkedinHandle: 'https://linkedin.com/company/test',
+          country: '',
         },
       };
       
@@ -282,6 +285,7 @@ describe('StepBrand Component', () => {
             website: '',
             twitterHandle: 'old_twitter',
             linkedinHandle: 'https://linkedin.com/company/old',
+            country: '',
           }}
         />
       );
@@ -495,6 +499,7 @@ describe('StepBrand Component', () => {
         website: '',
         twitterHandle: '',
         linkedinHandle: '',
+        country: '',
       });
     });
 
@@ -553,6 +558,7 @@ describe('StepBrand Component', () => {
         website: '',
         twitterHandle: '',
         linkedinHandle: '',
+        country: '',
       });
     });
 
@@ -574,6 +580,7 @@ describe('StepBrand Component', () => {
         website: '',
         twitterHandle: 'testuser',
         linkedinHandle: '',
+        country: '',
       });
     });
 
@@ -594,6 +601,7 @@ describe('StepBrand Component', () => {
         website: '',
         twitterHandle: '',
         linkedinHandle: 'https://linkedin.com/company/test',
+        country: '',
       });
     });
 
@@ -614,6 +622,7 @@ describe('StepBrand Component', () => {
         website: '',
         twitterHandle: '',
         linkedinHandle: '',
+        country: '',
       });
     });
   });
@@ -655,6 +664,7 @@ describe('StepBrand Component', () => {
           website: 'https://example.com',
           twitterHandle: '',
           linkedinHandle: '',
+          country: '',
         });
       });
       
