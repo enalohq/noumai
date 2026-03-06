@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { compare } from "bcryptjs";
 import { prisma } from "./lib/prisma";
+import { accountLinkingService } from "./lib/auth/account-linking";
 
 
 declare module "next-auth" {
@@ -33,9 +34,27 @@ const config: NextAuthConfig = {
         try {
           const user = await prisma.user.findUnique({
             where: { email: credentials.email as string },
+            include: { accounts: true }
           });
 
           if (!user) return null;
+          
+          // Scenario 2: User has OAuth account but trying to use credentials
+          // Check if user has OAuth accounts but no password
+          const hasOAuthAccount = user.accounts.some(acc => acc.provider !== 'credentials');
+          if (hasOAuthAccount && !user.password) {
+            // User has OAuth account but no password set
+            // This is a linking scenario - allow it to proceed
+            // The password will be set during account linking
+            console.log(`User ${credentials.email} attempting credentials login with existing OAuth account`);
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              image: user.image,
+            };
+          }
+          
           if (!user.password) return null;
 
           const isValid = await compare(credentials.password as string, user.password);
@@ -57,6 +76,7 @@ const config: NextAuthConfig = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      allowDangerousEmailAccountLinking: true, // Enable automatic account linking
     }),
   ],
   session: {
@@ -69,81 +89,70 @@ const config: NextAuthConfig = {
   },
   callbacks: {
     async signIn({ user, account }) {
-      // For OAuth providers, handle account linking and workspace creation
-      if (account?.provider !== "credentials" && user?.email) {
+      // Scenario 1: OAuth account linking (Email/Password → OAuth)
+      if (account?.provider !== "credentials" && user?.email && account) {
         try {
-          // Check if a user with this email already exists
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email },
-            include: {
-              accounts: true,
-              workspaces: { take: 1 },
-            },
-          });
-
-          if (existingUser) {
-            // User exists - check if this OAuth provider is already linked
-            const providerAlreadyLinked = existingUser.accounts.some(
-              (acc) => acc.provider === account?.provider
-            );
-
-            if (!providerAlreadyLinked) {
-              // Link the new OAuth account to the existing user
-              const accountData = {
-                userId: existingUser.id,
-                type: "oauth",
-                provider: account?.provider ?? "",
-                providerAccountId: account?.providerAccountId ?? "",
-                access_token: account?.access_token ?? null,
-                refresh_token: account?.refresh_token ?? null,
-                expires_at: account?.expires_at ? Math.floor(account.expires_at) : null,
-                token_type: account?.token_type ?? null,
-                scope: account?.scope ?? null,
-                id_token: account?.id_token ?? null,
-                session_state: typeof account?.session_state === 'string' ? account.session_state : null,
-              };
-              await prisma.account.create({ data: accountData });
-
-              // Update emailVerified since they're signing in with a verified OAuth provider
-              await prisma.user.update({
-                where: { id: existingUser.id },
-                data: { 
-                  emailVerified: new Date(),
-                  image: user.image || existingUser.image,
-                },
-              });
-
-              console.log(`Linked ${account?.provider} account to existing user: ${user.email}`);
-            }
-
-            // Ensure user has a workspace (create if missing)
-            if (existingUser.workspaces.length === 0) {
-              await prisma.workspace.create({
-                data: {
-                  name: `${user.name || user.email}'s Workspace`,
-                  description: "Default workspace",
-                  members: {
-                    create: { userId: existingUser.id, role: "owner" },
-                  },
-                },
-              });
-            }
-          } else {
-            // New user - create account and workspace
-            // The Account and User will be created by NextAuth/Prisma adapter
-            // We just need to ensure workspace is created
-            console.log(`New OAuth user created: ${user.email}`);
+          const result = await accountLinkingService.linkOAuthAccount(user, account);
+          
+          if (!result.success) {
+            console.error("OAuth account linking failed:", result.error);
+            return false;
           }
+
+          if (result.action === 'linked') {
+            console.log(`Successfully linked ${account.provider} account to existing user: ${user.email}`);
+          }
+
+          return true;
         } catch (error) {
           console.error("OAuth signIn hook error:", error);
+          return false;
         }
       }
+
+      // Scenario 2: Credentials account linking (OAuth → Email/Password)
+      if (account?.provider === "credentials" && user?.email) {
+        try {
+          const result = await accountLinkingService.linkCredentialsAccount(user.email, user.id);
+          
+          if (!result.success) {
+            console.error("Credentials account linking failed:", result.error);
+            return false;
+          }
+
+          if (result.action === 'linked') {
+            console.log(`Successfully linked credentials account to existing OAuth user: ${user.email}`);
+          }
+
+          return true;
+        } catch (error) {
+          console.error("Credentials signIn hook error:", error);
+          return false;
+        }
+      }
+
       return true;
     },
 
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, account }) {
+      // Handle user ID from OAuth linking
       if (user) {
         token.sub = user.id;
+      }
+
+      // For OAuth sign-ins, ensure we get the correct user ID
+      if (account?.provider !== "credentials" && user?.email && !token.sub) {
+        try {
+          const existingUser = await prisma.user.findUnique({
+            where: { email: user.email },
+            select: { id: true }
+          });
+          if (existingUser) {
+            token.sub = existingUser.id;
+          }
+        } catch (error) {
+          console.error("Error finding user in JWT callback:", error);
+        }
       }
 
       // Refresh onboardingCompleted from DB on initial sign-in or session.update()
@@ -172,10 +181,17 @@ const config: NextAuthConfig = {
     },
 
     async redirect({ url, baseUrl }) {
+      // Handle post-authentication redirects
       if (url.includes("/auth/signin")) return baseUrl + "/";
       if (url.startsWith("/")) return `${baseUrl}${url}`;
       else if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
+    },
+  },
+  events: {
+    async linkAccount({ user, account }) {
+      // Log successful account linking
+      console.log(`Account linked: ${account.provider} for user ${user.email}`);
     },
   },
   secret: process.env.AUTH_SECRET,
