@@ -362,7 +362,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
               className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-th-border text-xs text-th-text-muted hover:bg-th-border-dark"
               aria-label="Why do we need country?"
               // title="Helps us find local competitors and market trends"
-              title="Your coutry of operation"
+              title="Your country of operation"
             >
               ?
             </button>
@@ -374,17 +374,17 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
           </div>
           <div className="relative" ref={countryDropdownRef}>
             <div className="relative">
-            <input
-              ref={countryInputRef}
-              id="country"
-              type="text"
-              value={countryDisplay}
-              onChange={set("country")}
-              onFocus={() => setShowCountryDropdown(true)}
+              <input
+                ref={countryInputRef}
+                id="country"
+                type="text"
+                value={countryDisplay}
+                onChange={set("country")}
+                onFocus={() => setShowCountryDropdown(true)}
                 className="bd-input w-full rounded-lg py-2.5 pl-10 pr-2.5 text-sm"
-              placeholder="Type to search countries..."
-              required
-            />
+                placeholder="Type to search countries..."
+                required
+              />
               {data.country && (
                 <div className="absolute left-3 top-1/2 -translate-y-1/2">
                   <CountryFlag 
@@ -423,9 +423,9 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
               </div>
             )}
           </div>
-          <p className="mt-1 text-xs text-th-text-muted">
+          {/* <p className="mt-1 text-xs text-th-text-muted">
             Helps us find your competitors and market trends
-          </p>
+          </p> */}
         </div>
       </div>
 
