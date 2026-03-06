@@ -148,20 +148,27 @@ export class PrismaProviderTrackerService implements ProviderTrackerService {
    */
   async getCurrentProviders(userId: string): Promise<ProviderInfo[]> {
     try {
-      const accounts = await prisma.account.findMany({
-        where: { userId },
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
         select: {
-          provider: true,
-          type: true,
           createdAt: true,
-        },
-        orderBy: { createdAt: 'asc' }
+          accounts: {
+            select: {
+              provider: true,
+              type: true,
+            }
+          }
+        }
       });
 
-      return accounts.map((acc, index) => ({
+      if (!user) {
+        return [];
+      }
+
+      return user.accounts.map((acc, index) => ({
         provider: acc.provider,
         type: acc.type,
-        linkedAt: acc.createdAt,
+        linkedAt: user.createdAt,
         isPrimary: index === 0
       }));
     } catch (error) {
