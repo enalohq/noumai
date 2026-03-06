@@ -66,9 +66,7 @@ export class PrismaProviderTrackerService implements ProviderTrackerService {
             select: {
               provider: true,
               type: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'asc' }
+            }
           }
         }
       });
@@ -82,7 +80,7 @@ export class PrismaProviderTrackerService implements ProviderTrackerService {
         ? {
             provider: user.accounts[0].provider,
             type: user.accounts[0].type,
-            linkedAt: user.accounts[0].createdAt,
+            linkedAt: user.createdAt,
             isPrimary: true
           }
         : null;
@@ -91,7 +89,7 @@ export class PrismaProviderTrackerService implements ProviderTrackerService {
       const currentProviders = user.accounts.map((acc, index) => ({
         provider: acc.provider,
         type: acc.type,
-        linkedAt: acc.createdAt,
+        linkedAt: user.createdAt,
         isPrimary: index === 0
       }));
 
@@ -115,24 +113,28 @@ export class PrismaProviderTrackerService implements ProviderTrackerService {
    */
   async getInitialProvider(userId: string): Promise<ProviderInfo | null> {
     try {
-      const firstAccount = await prisma.account.findFirst({
-        where: { userId },
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
         select: {
-          provider: true,
-          type: true,
           createdAt: true,
-        },
-        orderBy: { createdAt: 'asc' }
+          accounts: {
+            select: {
+              provider: true,
+              type: true,
+            },
+            take: 1
+          }
+        }
       });
 
-      if (!firstAccount) {
+      if (!user || user.accounts.length === 0) {
         return null;
       }
 
       return {
-        provider: firstAccount.provider,
-        type: firstAccount.type,
-        linkedAt: firstAccount.createdAt,
+        provider: user.accounts[0].provider,
+        type: user.accounts[0].type,
+        linkedAt: user.createdAt,
         isPrimary: true
       };
     } catch (error) {
