@@ -37,10 +37,17 @@ import { prisma } from '@/lib/prisma';
 
 describe('Account Linking Integration Flow', () => {
   let service: PrismaAccountLinkingService;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     service = new PrismaAccountLinkingService();
     jest.clearAllMocks();
+    // Suppress console.error for all tests in this suite
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   describe('Complete User Journey', () => {
@@ -256,6 +263,11 @@ describe('Account Linking Integration Flow', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Database connection failed');
+      // Verify that the error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'OAuth account linking error:',
+        expect.any(Error)
+      );
     });
 
     it('should handle missing email', async () => {

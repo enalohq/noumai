@@ -31,9 +31,11 @@ jest.mock('@/lib/prisma', () => ({
 
 import { PrismaProviderTrackerService } from '@/lib/auth/provider-tracker';
 import { prisma } from '@/lib/prisma';
+import { providerFactory } from '@/__tests__/factories/provider.factory';
 
 describe('Provider Tracker Service', () => {
   let service: PrismaProviderTrackerService;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     service = new PrismaProviderTrackerService();
@@ -41,6 +43,12 @@ describe('Provider Tracker Service', () => {
     (prisma.user.findUnique as jest.Mock).mockClear();
     (prisma.account.findFirst as jest.Mock).mockClear();
     (prisma.account.findMany as jest.Mock).mockClear();
+    // Suppress console.error for all tests in this suite
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   describe('getUserProviderHistory', () => {
@@ -133,6 +141,11 @@ describe('Provider Tracker Service', () => {
       const result = await service.getUserProviderHistory('user-123');
 
       expect(result).toBeNull();
+      // Verify that the error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Error'),
+        expect.any(Error)
+      );
     });
   });
 
@@ -151,12 +164,7 @@ describe('Provider Tracker Service', () => {
 
       const result = await service.getInitialProvider('user-123');
 
-      expect(result).toEqual({
-        provider: 'google',
-        type: 'oauth',
-        linkedAt: createdAt,
-        isPrimary: true
-      });
+      expect(result).toEqual(providerFactory.google({ linkedAt: createdAt, isPrimary: true }));
     });
 
     it('should return null if user has no providers', async () => {
@@ -220,6 +228,11 @@ describe('Provider Tracker Service', () => {
       const result = await service.getCurrentProviders('user-123');
 
       expect(result).toEqual([]);
+      // Verify that the error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Error'),
+        expect.any(Error)
+      );
     });
   });
 
@@ -335,6 +348,11 @@ describe('Provider Tracker Service', () => {
         hasOAuth: false,
         oauthProviders: []
       });
+      // Verify that the error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Error'),
+        expect.any(Error)
+      );
     });
   });
 
@@ -376,9 +394,9 @@ describe('Provider Tracker Service', () => {
 
       const currentProviders = await service.getCurrentProviders('user-123');
       expect(currentProviders).toHaveLength(3);
-      expect(currentProviders[0].provider).toBe('credentials');
-      expect(currentProviders[1].provider).toBe('google');
-      expect(currentProviders[2].provider).toBe('github');
+      expect(currentProviders[0]).toEqual(providerFactory.credentials({ linkedAt: createdAt, isPrimary: true }));
+      expect(currentProviders[1]).toEqual(providerFactory.google({ linkedAt: createdAt, isPrimary: false }));
+      expect(currentProviders[2]).toEqual(providerFactory.github({ linkedAt: createdAt, isPrimary: false }));
     });
 
     it('should track user journey: Google → Email/Password', async () => {
@@ -414,8 +432,8 @@ describe('Provider Tracker Service', () => {
 
       const currentProviders = await service.getCurrentProviders('user-456');
       expect(currentProviders).toHaveLength(2);
-      expect(currentProviders[0].provider).toBe('google');
-      expect(currentProviders[1].provider).toBe('credentials');
+      expect(currentProviders[0]).toEqual(providerFactory.google({ linkedAt: createdAt, isPrimary: true }));
+      expect(currentProviders[1]).toEqual(providerFactory.credentials({ linkedAt: createdAt, isPrimary: false }));
     });
   });
 });

@@ -35,6 +35,7 @@ describe('Account Linking Service', () => {
   let service: PrismaAccountLinkingService;
   let mockUser: User;
   let mockAccount: Account;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     service = new PrismaAccountLinkingService();
@@ -61,6 +62,12 @@ describe('Account Linking Service', () => {
 
     // Reset all mocks
     jest.clearAllMocks();
+    // Suppress console.error for all tests in this suite
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   describe('linkOAuthAccount', () => {
@@ -180,6 +187,11 @@ describe('Account Linking Service', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Database error');
+      // Verify that the error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'OAuth account linking error:',
+        expect.any(Error)
+      );
     });
 
     it('should return created action for new users', async () => {
