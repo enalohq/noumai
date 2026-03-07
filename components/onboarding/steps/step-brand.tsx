@@ -328,11 +328,11 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
           <label htmlFor="brandName" className="mb-1.5 block text-sm font-semibold text-th-text">
             Brand / Company Name <span className="text-th-danger">*</span>
             <span className="ml-1 text-xs font-normal text-th-text-muted">(required)</span>
-            {oauthName && !data.brandName && (
+            {/* {oauthName && !data.brandName && (
               <span className="ml-2 text-xs font-normal text-th-accent">
                 (Pre-filled from Google)
               </span>
-            )}
+            )} */}
           </label>
           <input
             id="brandName"
