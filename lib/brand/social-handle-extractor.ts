@@ -391,41 +391,23 @@ export function extractSocialFromInlineScripts(html: string): { twitter?: string
       continue;
     }
     
-    // Look for arrays of URLs containing social media links
-    // Pattern: ["https://x.com/handle", "https://instagram.com/...", ...]
-    const urlArrayRegex = /\["([^"\]]*(?:twitter\.com|x\.com|linkedin\.com|instagram\.com|youtube\.com|facebook\.com)[^"\]]*)"\]/gi;
-    let urlMatch;
-    
-    while ((urlMatch = urlArrayRegex.exec(scriptContent)) !== null) {
-      const urls = urlMatch[1].split('","');
-      
-      for (const url of urls) {
-        const cleanUrl = url.trim();
-        
-        // Extract Twitter/X handle
-        if (!result.twitter && (cleanUrl.includes('twitter.com/') || cleanUrl.includes('x.com/'))) {
-          const twitterMatch = cleanUrl.match(/(?:twitter|x)\.com\/[@]?([a-z0-9_]+)/i);
-          if (twitterMatch) {
-            result.twitter = twitterMatch[1].toLowerCase();
-            if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
-              console.log('[extractSocialFromInlineScripts] Extracted Twitter handle:', result.twitter);
-            }
-          }
-        }
-        
-        // Extract LinkedIn URL
-        if (!result.linkedin && (cleanUrl.includes('linkedin.com/company/') || cleanUrl.includes('linkedin.com/in/'))) {
-          result.linkedin = cleanUrl;
-          if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
-            console.log('[extractSocialFromInlineScripts] Extracted LinkedIn URL:', result.linkedin);
-          }
-        }
-        
-        // Early exit if we have both
-        if (result.twitter && result.linkedin) {
-          return result;
-        }
+    // Look for Twitter/X URLs in the script content
+    const twitterUrlRegex = /(?:https?:\/\/)?(?:www\.)?(?:twitter|x)\.com\/[@]?([a-z0-9_]+)/gi;
+    let twitterMatch;
+    while ((twitterMatch = twitterUrlRegex.exec(scriptContent)) !== null) {
+      const handle = twitterMatch[1].toLowerCase();
+      if (handle.length >= 2 && handle.length <= 15) {
+        result.twitter = handle;
+        break;
       }
+    }
+    
+    // Look for LinkedIn URLs in the script content
+    const linkedinUrlRegex = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:company\/|in\/)([a-z0-9\-]+)/gi;
+    let linkedinMatch;
+    while ((linkedinMatch = linkedinUrlRegex.exec(scriptContent)) !== null) {
+      result.linkedin = `https://www.linkedin.com/${linkedinMatch[0].includes('company/') ? 'company/' : 'in/'}${linkedinMatch[1]}`;
+      break;
     }
   }
   
