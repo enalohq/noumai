@@ -55,7 +55,14 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchSuccess, setFetchSuccess] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [countryDisplay, setCountryDisplay] = useState("");
+  const [countryDisplay, setCountryDisplay] = useState(() => {
+    // Initialize with existing country value if present
+    if (data.country) {
+      const foundCountry = findCountry(data.country);
+      return foundCountry ? foundCountry.name : data.country;
+    }
+    return "";
+  });
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [isCountryAutoDetected, setIsCountryAutoDetected] = useState(false);
   const countryInputRef = useRef<HTMLInputElement>(null);
@@ -205,6 +212,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
       const value = e.target.value;
       setCountryDisplay(value);
       setIsCountryAutoDetected(false);
+      countrySelectedRef.current = false; // Hide flag while typing
       
       // Show dropdown if there's text
       if (value.trim()) {
@@ -213,15 +221,9 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
         setShowCountryDropdown(false);
       }
       
-      // If it matches a country exactly, select it
-      const foundCountry = findCountry(value);
-      if (foundCountry) {
-        onChange({ ...data, country: foundCountry.name });
-        setCountryDisplay(foundCountry.name);
-        setShowCountryDropdown(false);
-      } else {
-        onChange({ ...data, country: value });
-      }
+      // Update country value without auto-selecting
+      // User must explicitly select from dropdown
+      onChange({ ...data, country: value });
       return;
     }
     
@@ -232,6 +234,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   const handleCountrySelect = (country: CountryOption) => {
     // Mark country as manually edited when selected from dropdown
     userEditedFields.current.country = true;
+    countrySelectedRef.current = true;
     
     onChange({ ...data, country: country.name });
     setCountryDisplay(country.name);
@@ -258,17 +261,8 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Initialize country display with current country value
-  useEffect(() => {
-    if (data.country) {
-      const foundCountry = findCountry(data.country);
-      if (foundCountry) {
-        setCountryDisplay(foundCountry.name);
-      } else {
-        setCountryDisplay(data.country);
-      }
-    }
-  }, [data.country]);
+  // Track if user has explicitly selected a country (not just typing)
+  const countrySelectedRef = useRef(false);
 
   // Get filtered countries for dropdown
   const getSearchText = (display: string): string => {
@@ -391,7 +385,8 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
                 placeholder="Type to search countries..."
                 required
               />
-              {data.country && (
+              {/* Only show flag when country is explicitly selected or auto-detected */}
+              {(countrySelectedRef.current || isCountryAutoDetected) && data.country && (
                 <div className="absolute left-3 top-1/2 -translate-y-1/2">
                   <CountryFlag 
                     countryCode={findCountry(data.country)?.code || data.country.slice(0, 2).toUpperCase()} 
@@ -405,7 +400,7 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
                 {filteredCountries.length > 0 ? (
                   filteredCountries.map((country) => (
                     <button
-                      key={country.code}
+                      key={`${country.code}-${country.name}`}
                       type="button"
                       className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-100"
                       onClick={() => handleCountrySelect(country)}

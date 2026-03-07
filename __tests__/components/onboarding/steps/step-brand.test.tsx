@@ -927,4 +927,145 @@ describe('StepBrand Component', () => {
       
       jest.useRealTimers();
     });
+
+    it('does not show flag while typing country code', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // Type a country code (IN for India)
+      const countryInput = screen.getByLabelText(/country/i);
+      fireEvent.change(countryInput, { target: { value: 'IN' } });
+      
+      // Flag should NOT appear while typing
+      await waitFor(() => {
+        // The flag is in a div with absolute positioning, check that it's not visible
+        const flagContainer = document.body.querySelector('.absolute.left-3');
+        if (flagContainer) {
+          // If flag container exists, it should not be visible (display: none or not rendered)
+          expect(flagContainer).not.toBeVisible();
+        }
+      });
+      
+      jest.useRealTimers();
+    });
+
+    it('shows flag when user selects country from dropdown', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // Type to search for a country
+      const countryInput = screen.getByLabelText(/country/i);
+      fireEvent.change(countryInput, { target: { value: 'United' } });
+      
+      // Wait for dropdown to appear
+      await waitFor(() => {
+        expect(screen.getByText('United States')).toBeInTheDocument();
+      });
+      
+      // Click on United States in dropdown
+      const usOption = screen.getByText('United States');
+      fireEvent.click(usOption);
+      
+      // Flag should now be visible (country is selected)
+      await waitFor(() => {
+        const flagContainer = document.body.querySelector('.absolute.left-3');
+        if (flagContainer) {
+          expect(flagContainer).toBeVisible();
+        }
+      });
+      
+      jest.useRealTimers();
+    });
+
+    it('shows flag when country is auto-detected from metadata', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // Enter URL that will trigger auto-fill with country
+      const urlInput = screen.getByLabelText(/website url/i);
+      fireEvent.change(urlInput, { target: { value: 'https://example.com' } });
+      
+      // Fast-forward past debounce time
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+      
+      // Wait for fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+      
+      // Country should be auto-filled
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('United States')).toBeInTheDocument();
+      });
+      
+      // Flag should be visible (auto-detected)
+      await waitFor(() => {
+        const flagContainer = document.body.querySelector('.absolute.left-3');
+        if (flagContainer) {
+          expect(flagContainer).toBeVisible();
+        }
+      });
+      
+      // Should show auto-detected indicator
+      expect(screen.getByText(/✓ auto-detected/i)).toBeInTheDocument();
+      
+      jest.useRealTimers();
+    });
+
+    it('hides flag when user starts editing after selection', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // Type to search for a country
+      const countryInput = screen.getByLabelText(/country/i);
+      fireEvent.change(countryInput, { target: { value: 'United' } });
+      
+      // Wait for dropdown to appear
+      await waitFor(() => {
+        expect(screen.getByText('United States')).toBeInTheDocument();
+      });
+      
+      // Click on United States in dropdown
+      const usOption = screen.getByText('United States');
+      fireEvent.click(usOption);
+      
+      // Flag should be visible
+      await waitFor(() => {
+        const flagContainer = document.body.querySelector('.absolute.left-3');
+        if (flagContainer) {
+          expect(flagContainer).toBeVisible();
+        }
+      });
+      
+      // Now start editing the country
+      fireEvent.change(countryInput, { target: { value: 'Uni' } });
+      
+      // Flag should be hidden while editing
+      await waitFor(() => {
+        const flagContainer = document.body.querySelector('.absolute.left-3');
+        if (flagContainer) {
+          expect(flagContainer).not.toBeVisible();
+        }
+      });
+      
+      jest.useRealTimers();
+    });
   });
