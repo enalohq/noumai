@@ -786,7 +786,7 @@ describe('StepBrand Component', () => {
       fireEvent.click(advancedButton);
       
       // First, manually edit the country field
-      const countryInput = screen.getByLabelText(/country/i);
+      const countryInput = screen.getByLabelText(/country/i, { selector: 'input' });
       fireEvent.change(countryInput, { target: { value: 'Canada' } });
       
       // Wait for the change to be processed
@@ -890,7 +890,7 @@ describe('StepBrand Component', () => {
       fireEvent.click(advancedButton);
       
       // Manually edit country first
-      const countryInput = screen.getByLabelText(/country/i);
+      const countryInput = screen.getByLabelText(/country/i, { selector: 'input' });
       fireEvent.change(countryInput, { target: { value: 'France' } });
       
       await waitFor(() => {
@@ -936,18 +936,14 @@ describe('StepBrand Component', () => {
       const advancedButton = screen.getByText(/brand social link/i);
       fireEvent.click(advancedButton);
       
-      // Type a country code (IN for India)
-      const countryInput = screen.getByLabelText(/country/i);
+      // Type a country code (IN for India) - use placeholder to find the input
+      const countryInput = screen.getByPlaceholderText(/type to search countries/i);
       fireEvent.change(countryInput, { target: { value: 'IN' } });
       
       // Flag should NOT appear while typing
       await waitFor(() => {
-        // The flag is in a div with absolute positioning, check that it's not visible
-        const flagContainer = document.body.querySelector('.absolute.left-3');
-        if (flagContainer) {
-          // If flag container exists, it should not be visible (display: none or not rendered)
-          expect(flagContainer).not.toBeVisible();
-        }
+        const flagContainer = screen.queryByTestId('country-flag-container');
+        expect(flagContainer).toBeNull();
       });
       
       jest.useRealTimers();
@@ -961,8 +957,8 @@ describe('StepBrand Component', () => {
       const advancedButton = screen.getByText(/brand social link/i);
       fireEvent.click(advancedButton);
       
-      // Type to search for a country
-      const countryInput = screen.getByLabelText(/country/i);
+      // Type to search for a country - use placeholder to find the input
+      const countryInput = screen.getByPlaceholderText(/type to search countries/i);
       fireEvent.change(countryInput, { target: { value: 'United' } });
       
       // Wait for dropdown to appear
@@ -976,10 +972,8 @@ describe('StepBrand Component', () => {
       
       // Flag should now be visible (country is selected)
       await waitFor(() => {
-        const flagContainer = document.body.querySelector('.absolute.left-3');
-        if (flagContainer) {
-          expect(flagContainer).toBeVisible();
-        }
+        const flagContainer = screen.getByTestId('country-flag-container');
+        expect(flagContainer).toBeVisible();
       });
       
       jest.useRealTimers();
@@ -1014,10 +1008,8 @@ describe('StepBrand Component', () => {
       
       // Flag should be visible (auto-detected)
       await waitFor(() => {
-        const flagContainer = document.body.querySelector('.absolute.left-3');
-        if (flagContainer) {
-          expect(flagContainer).toBeVisible();
-        }
+        const flagContainer = screen.getByTestId('country-flag-container');
+        expect(flagContainer).toBeVisible();
       });
       
       // Should show auto-detected indicator
@@ -1034,8 +1026,8 @@ describe('StepBrand Component', () => {
       const advancedButton = screen.getByText(/brand social link/i);
       fireEvent.click(advancedButton);
       
-      // Type to search for a country
-      const countryInput = screen.getByLabelText(/country/i);
+      // Type to search for a country - use placeholder to find the input
+      const countryInput = screen.getByPlaceholderText(/type to search countries/i);
       fireEvent.change(countryInput, { target: { value: 'United' } });
       
       // Wait for dropdown to appear
@@ -1049,10 +1041,8 @@ describe('StepBrand Component', () => {
       
       // Flag should be visible
       await waitFor(() => {
-        const flagContainer = document.body.querySelector('.absolute.left-3');
-        if (flagContainer) {
-          expect(flagContainer).toBeVisible();
-        }
+        const flagContainer = screen.getByTestId('country-flag-container');
+        expect(flagContainer).toBeVisible();
       });
       
       // Now start editing the country
@@ -1060,10 +1050,8 @@ describe('StepBrand Component', () => {
       
       // Flag should be hidden while editing
       await waitFor(() => {
-        const flagContainer = document.body.querySelector('.absolute.left-3');
-        if (flagContainer) {
-          expect(flagContainer).not.toBeVisible();
-        }
+        const flagContainer = screen.queryByTestId('country-flag-container');
+        expect(flagContainer).toBeNull();
       });
       
       jest.useRealTimers();

@@ -18,6 +18,15 @@ jest.mock('@/lib/prisma', () => ({
       findMany: jest.fn(),
     },
   },
+  default: {
+    user: {
+      findUnique: jest.fn(),
+    },
+    account: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+  },
 }));
 
 import { PrismaProviderTrackerService } from '@/lib/auth/provider-tracker';
@@ -25,11 +34,13 @@ import { prisma } from '@/lib/prisma';
 
 describe('Provider Tracker Service', () => {
   let service: PrismaProviderTrackerService;
-  const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 
   beforeEach(() => {
     service = new PrismaProviderTrackerService();
-    jest.clearAllMocks();
+    // Reset mock call history but keep implementations
+    (prisma.user.findUnique as jest.Mock).mockClear();
+    (prisma.account.findFirst as jest.Mock).mockClear();
+    (prisma.account.findMany as jest.Mock).mockClear();
   });
 
   describe('getUserProviderHistory', () => {
@@ -47,7 +58,7 @@ describe('Provider Tracker Service', () => {
         ]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(userData);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(userData);
 
       const result = await service.getUserProviderHistory('user-123');
 
@@ -97,7 +108,7 @@ describe('Provider Tracker Service', () => {
         ]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(userData);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(userData);
 
       const result = await service.getUserProviderHistory('user-456');
 
@@ -109,7 +120,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should return null for non-existent user', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getUserProviderHistory('non-existent');
 
@@ -117,7 +128,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      mockPrisma.user.findUnique.mockRejectedValue(new Error('Database error'));
+      (prisma.user.findUnique as jest.Mock).mockRejectedValue(new Error('Database error'));
 
       const result = await service.getUserProviderHistory('user-123');
 
@@ -127,10 +138,15 @@ describe('Provider Tracker Service', () => {
 
   describe('getInitialProvider', () => {
     it('should return the first provider used for signup', async () => {
-      mockPrisma.account.findFirst.mockResolvedValue({
-        provider: 'google',
-        type: 'oauth',
-        createdAt: new Date('2024-01-01')
+      const createdAt = new Date('2024-01-01');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt,
+        accounts: [
+          {
+            provider: 'google',
+            type: 'oauth',
+          }
+        ]
       });
 
       const result = await service.getInitialProvider('user-123');
@@ -138,23 +154,16 @@ describe('Provider Tracker Service', () => {
       expect(result).toEqual({
         provider: 'google',
         type: 'oauth',
-        linkedAt: new Date('2024-01-01'),
+        linkedAt: createdAt,
         isPrimary: true
-      });
-
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
-        where: { userId: 'user-123' },
-        select: {
-          provider: true,
-          type: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: 'asc' }
       });
     });
 
     it('should return null if user has no providers', async () => {
-      mockPrisma.account.findFirst.mockResolvedValue(null);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt: new Date('2024-01-01'),
+        accounts: []
+      });
 
       const result = await service.getInitialProvider('user-123');
 
@@ -164,23 +173,24 @@ describe('Provider Tracker Service', () => {
 
   describe('getCurrentProviders', () => {
     it('should return all linked providers in order', async () => {
-      mockPrisma.account.findMany.mockResolvedValue([
-        {
-          provider: 'credentials',
-          type: 'credentials',
-          createdAt: new Date('2024-01-01')
-        },
-        {
-          provider: 'google',
-          type: 'oauth',
-          createdAt: new Date('2024-01-15')
-        },
-        {
-          provider: 'github',
-          type: 'oauth',
-          createdAt: new Date('2024-02-01')
-        }
-      ]);
+      const createdAt = new Date('2024-01-01');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt,
+        accounts: [
+          {
+            provider: 'credentials',
+            type: 'credentials',
+          },
+          {
+            provider: 'google',
+            type: 'oauth',
+          },
+          {
+            provider: 'github',
+            type: 'oauth',
+          }
+        ]
+      });
 
       const result = await service.getCurrentProviders('user-123');
 
@@ -194,7 +204,10 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should return empty array if user has no providers', async () => {
-      mockPrisma.account.findMany.mockResolvedValue([]);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt: new Date('2024-01-01'),
+        accounts: []
+      });
 
       const result = await service.getCurrentProviders('user-123');
 
@@ -202,7 +215,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      mockPrisma.account.findMany.mockRejectedValue(new Error('Database error'));
+      (prisma.user.findUnique as jest.Mock).mockRejectedValue(new Error('Database error'));
 
       const result = await service.getCurrentProviders('user-123');
 
@@ -212,7 +225,7 @@ describe('Provider Tracker Service', () => {
 
   describe('hasProvider', () => {
     it('should return true if user has provider', async () => {
-      mockPrisma.account.findFirst.mockResolvedValue({
+      (prisma.account.findFirst as jest.Mock).mockResolvedValue({
         id: 'account-123',
         provider: 'google'
       });
@@ -223,7 +236,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should return false if user does not have provider', async () => {
-      mockPrisma.account.findFirst.mockResolvedValue(null);
+      (prisma.account.findFirst as jest.Mock).mockResolvedValue(null);
 
       const result = await service.hasProvider('user-123', 'github');
 
@@ -231,11 +244,11 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should check for specific provider', async () => {
-      mockPrisma.account.findFirst.mockResolvedValue(null);
+      (prisma.account.findFirst as jest.Mock).mockResolvedValue(null);
 
       await service.hasProvider('user-123', 'google');
 
-      expect(mockPrisma.account.findFirst).toHaveBeenCalledWith({
+      expect((prisma.account.findFirst as jest.Mock)).toHaveBeenCalledWith({
         where: {
           userId: 'user-123',
           provider: 'google'
@@ -246,7 +259,7 @@ describe('Provider Tracker Service', () => {
 
   describe('getProviderStats', () => {
     it('should return stats for user with mixed providers', async () => {
-      mockPrisma.account.findMany.mockResolvedValue([
+      (prisma.account.findMany as jest.Mock).mockResolvedValue([
         { provider: 'credentials', type: 'credentials' },
         { provider: 'google', type: 'oauth' },
         { provider: 'github', type: 'oauth' }
@@ -264,7 +277,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should return stats for OAuth-only user', async () => {
-      mockPrisma.account.findMany.mockResolvedValue([
+      (prisma.account.findMany as jest.Mock).mockResolvedValue([
         { provider: 'google', type: 'oauth' },
         { provider: 'github', type: 'oauth' }
       ]);
@@ -281,7 +294,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should return stats for credentials-only user', async () => {
-      mockPrisma.account.findMany.mockResolvedValue([
+      (prisma.account.findMany as jest.Mock).mockResolvedValue([
         { provider: 'credentials', type: 'credentials' }
       ]);
 
@@ -297,7 +310,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should return empty stats if user has no providers', async () => {
-      mockPrisma.account.findMany.mockResolvedValue([]);
+      (prisma.account.findMany as jest.Mock).mockResolvedValue([]);
 
       const result = await service.getProviderStats('user-123');
 
@@ -311,7 +324,7 @@ describe('Provider Tracker Service', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      mockPrisma.account.findMany.mockRejectedValue(new Error('Database error'));
+      (prisma.account.findMany as jest.Mock).mockRejectedValue(new Error('Database error'));
 
       const result = await service.getProviderStats('user-123');
 
@@ -328,34 +341,38 @@ describe('Provider Tracker Service', () => {
   describe('Real-world Scenarios', () => {
     it('should track user journey: Email/Password → Google → GitHub', async () => {
       // Initial signup with email/password
-      mockPrisma.account.findFirst.mockResolvedValue({
-        provider: 'credentials',
-        type: 'credentials',
-        createdAt: new Date('2024-01-01')
+      const createdAt = new Date('2024-01-01');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt,
+        accounts: [
+          {
+            provider: 'credentials',
+            type: 'credentials',
+          }
+        ]
       });
 
       const initialProvider = await service.getInitialProvider('user-123');
       expect(initialProvider?.provider).toBe('credentials');
 
-      // Later linked Google
-      // Later linked GitHub
-      mockPrisma.account.findMany.mockResolvedValue([
-        {
-          provider: 'credentials',
-          type: 'credentials',
-          createdAt: new Date('2024-01-01')
-        },
-        {
-          provider: 'google',
-          type: 'oauth',
-          createdAt: new Date('2024-01-15')
-        },
-        {
-          provider: 'github',
-          type: 'oauth',
-          createdAt: new Date('2024-02-01')
-        }
-      ]);
+      // Later linked Google and GitHub
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt,
+        accounts: [
+          {
+            provider: 'credentials',
+            type: 'credentials',
+          },
+          {
+            provider: 'google',
+            type: 'oauth',
+          },
+          {
+            provider: 'github',
+            type: 'oauth',
+          }
+        ]
+      });
 
       const currentProviders = await service.getCurrentProviders('user-123');
       expect(currentProviders).toHaveLength(3);
@@ -366,28 +383,34 @@ describe('Provider Tracker Service', () => {
 
     it('should track user journey: Google → Email/Password', async () => {
       // Initial signup with Google
-      mockPrisma.account.findFirst.mockResolvedValue({
-        provider: 'google',
-        type: 'oauth',
-        createdAt: new Date('2024-01-01')
+      const createdAt = new Date('2024-01-01');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt,
+        accounts: [
+          {
+            provider: 'google',
+            type: 'oauth',
+          }
+        ]
       });
 
       const initialProvider = await service.getInitialProvider('user-456');
       expect(initialProvider?.provider).toBe('google');
 
       // Later added email/password
-      mockPrisma.account.findMany.mockResolvedValue([
-        {
-          provider: 'google',
-          type: 'oauth',
-          createdAt: new Date('2024-01-01')
-        },
-        {
-          provider: 'credentials',
-          type: 'credentials',
-          createdAt: new Date('2024-01-20')
-        }
-      ]);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        createdAt,
+        accounts: [
+          {
+            provider: 'google',
+            type: 'oauth',
+          },
+          {
+            provider: 'credentials',
+            type: 'credentials',
+          }
+        ]
+      });
 
       const currentProviders = await service.getCurrentProviders('user-456');
       expect(currentProviders).toHaveLength(2);

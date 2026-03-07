@@ -8,30 +8,32 @@
  * 4. User should be redirected to appropriate page
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+// Mock the Prisma module BEFORE importing the service
+jest.mock('@/lib/prisma', () => {
+  const mockPrisma = {
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    account: {
+      create: jest.fn(),
+    },
+    workspace: {
+      create: jest.fn(),
+    },
+    workspaceMember: {
+      count: jest.fn(),
+    },
+  };
+
+  return {
+    prisma: mockPrisma,
+    default: mockPrisma,
+  };
+});
+
 import { PrismaAccountLinkingService } from '@/lib/auth/account-linking';
-
-// Mock Prisma client directly
-const mockPrisma = {
-  user: {
-    findUnique: jest.fn(),
-    update: jest.fn(),
-  },
-  account: {
-    create: jest.fn(),
-  },
-  workspace: {
-    create: jest.fn(),
-  },
-  workspaceMember: {
-    count: jest.fn(),
-  },
-};
-
-// Mock the Prisma module
-jest.mock('@/lib/prisma', () => ({
-  prisma: mockPrisma,
-}));
+import { prisma } from '@/lib/prisma';
 
 describe('Account Linking Integration Flow', () => {
   let service: PrismaAccountLinkingService;
@@ -59,13 +61,13 @@ describe('Account Linking Integration Flow', () => {
         ]
       };
 
-      mockPrisma.user.findUnique
+      (prisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: 'John Doe' }); // For updateUserWithOAuthData
       
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspaceMember.count.mockResolvedValue(1); // Has workspace
+      (prisma.account.create as jest.Mock).mockResolvedValue({});
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      (prisma.workspaceMember.count as jest.Mock).mockResolvedValue(1); // Has workspace
 
       // 2. Simulate OAuth sign-in attempt
       const oauthUser = {
@@ -97,7 +99,7 @@ describe('Account Linking Integration Flow', () => {
       expect(result.userId).toBe('existing-user-123');
 
       // 5. Verify account was created with correct data
-      expect(mockPrisma.account.create).toHaveBeenCalledWith({
+      expect((prisma.account.create as jest.Mock)).toHaveBeenCalledWith({
         data: {
           userId: 'existing-user-123',
           type: 'oauth',
@@ -114,7 +116,7 @@ describe('Account Linking Integration Flow', () => {
       });
 
       // 6. Verify user was updated with OAuth data
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      expect((prisma.user.update as jest.Mock)).toHaveBeenCalledWith({
         where: { id: 'existing-user-123' },
         data: {
           emailVerified: expect.any(Date),
@@ -133,14 +135,14 @@ describe('Account Linking Integration Flow', () => {
         workspaces: [] // No workspace
       };
 
-      mockPrisma.user.findUnique
+      (prisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: 'Jane Doe' }); // For updateUserWithOAuthData
       
-      mockPrisma.workspaceMember.count.mockResolvedValue(0);
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspace.create.mockResolvedValue({});
+      (prisma.workspaceMember.count as jest.Mock).mockResolvedValue(0);
+      (prisma.account.create as jest.Mock).mockResolvedValue({});
+      (prisma.user.update as jest.Mock).mockResolvedValue({});
+      (prisma.workspace.create as jest.Mock).mockResolvedValue({});
 
       const oauthUser = {
         id: 'oauth-user',
@@ -161,7 +163,7 @@ describe('Account Linking Integration Flow', () => {
       expect(result.action).toBe('linked');
 
       // Should create workspace
-      expect(mockPrisma.workspace.create).toHaveBeenCalledWith({
+      expect((prisma.workspace.create as jest.Mock)).toHaveBeenCalledWith({
         data: {
           name: "Jane Doe Updated's Workspace",
           description: "Default workspace",
@@ -174,7 +176,7 @@ describe('Account Linking Integration Flow', () => {
 
     it('should handle new user creation flow', async () => {
       // No existing user found
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
       const newUser = {
         id: 'new-oauth-user',
@@ -195,7 +197,7 @@ describe('Account Linking Integration Flow', () => {
       expect(result.action).toBe('created');
 
       // Should not create account link (NextAuth handles new user creation)
-      expect(mockPrisma.account.create).not.toHaveBeenCalled();
+      expect((prisma.account.create as jest.Mock)).not.toHaveBeenCalled();
     });
 
     it('should handle already linked provider gracefully', async () => {
@@ -209,7 +211,7 @@ describe('Account Linking Integration Flow', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const oauthUser = {
         id: 'google-user',
@@ -230,13 +232,13 @@ describe('Account Linking Integration Flow', () => {
       expect(result.userId).toBe('user-with-google');
 
       // Should not create new account
-      expect(mockPrisma.account.create).not.toHaveBeenCalled();
+      expect((prisma.account.create as jest.Mock)).not.toHaveBeenCalled();
     });
   });
 
   describe('Error Scenarios', () => {
     it('should handle database errors gracefully', async () => {
-      mockPrisma.user.findUnique.mockRejectedValue(new Error('Database connection failed'));
+      (prisma.user.findUnique as jest.Mock).mockRejectedValue(new Error('Database connection failed'));
 
       const user = {
         id: 'user-id',

@@ -387,7 +387,10 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
               />
               {/* Only show flag when country is explicitly selected or auto-detected */}
               {(countrySelectedRef.current || isCountryAutoDetected) && data.country && (
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <div 
+                  className="absolute left-3 top-1/2 -translate-y-1/2"
+                  data-testid="country-flag-container"
+                >
                   <CountryFlag 
                     countryCode={findCountry(data.country)?.code || data.country.slice(0, 2).toUpperCase()} 
                     className="h-4 w-6"

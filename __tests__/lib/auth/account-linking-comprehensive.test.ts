@@ -28,7 +28,6 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 import { PrismaAccountLinkingService } from '@/lib/auth/account-linking';
-import type { User, Account } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 
 describe('Comprehensive Account Linking', () => {
@@ -52,13 +51,13 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique
+      (mockPrisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: 'John Doe' });
       
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspaceMember.count.mockResolvedValue(1);
+      (mockPrisma.account.create as jest.Mock).mockResolvedValue({});
+      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.workspaceMember.count as jest.Mock).mockResolvedValue(1);
 
       const oauthUser = {
         id: 'google-user-456',
@@ -80,7 +79,7 @@ describe('Comprehensive Account Linking', () => {
         session_state: null,
       };
 
-      const result = await service.linkOAuthAccount(oauthUser, oauthAccount);
+      const result = await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       expect(result.success).toBe(true);
       expect(result.action).toBe('linked');
@@ -100,13 +99,13 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique
+      (mockPrisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: 'John Doe' });
       
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspaceMember.count.mockResolvedValue(1);
+      (mockPrisma.account.create as jest.Mock).mockResolvedValue({});
+      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.workspaceMember.count as jest.Mock).mockResolvedValue(1);
 
       const oauthUser = {
         id: 'github-user-789',
@@ -121,7 +120,7 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      const result = await service.linkOAuthAccount(oauthUser, githubAccount);
+      const result = await service.linkOAuthAccount(oauthUser as any, githubAccount as any);
 
       expect(result.success).toBe(true);
       expect(result.action).toBe('linked');
@@ -147,7 +146,7 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const result = await service.linkCredentialsAccount('user@example.com', 'user-oauth-123');
 
@@ -168,7 +167,7 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const result = await service.linkCredentialsAccount('user@example.com', 'user-multi-oauth');
 
@@ -189,7 +188,7 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const result = await service.linkCredentialsAccount('user@example.com', 'user-both');
 
@@ -203,7 +202,7 @@ describe('Comprehensive Account Linking', () => {
 
   describe('Edge Cases', () => {
     it('should handle new user creation (no existing account)', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 
       const oauthUser = {
         id: 'new-oauth-user',
@@ -218,7 +217,7 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      const result = await service.linkOAuthAccount(oauthUser, oauthAccount);
+      const result = await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       expect(result.success).toBe(true);
       expect(result.action).toBe('created');
@@ -234,14 +233,14 @@ describe('Comprehensive Account Linking', () => {
         workspaces: []
       };
 
-      mockPrisma.user.findUnique
+      (mockPrisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: 'John Doe' });
       
-      mockPrisma.workspaceMember.count.mockResolvedValue(0);
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspace.create.mockResolvedValue({});
+      (mockPrisma.workspaceMember.count as jest.Mock).mockResolvedValue(0);
+      (mockPrisma.account.create as jest.Mock).mockResolvedValue({});
+      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.workspace.create as jest.Mock).mockResolvedValue({});
 
       const oauthUser = {
         id: 'oauth-user',
@@ -256,7 +255,7 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      const result = await service.linkOAuthAccount(oauthUser, oauthAccount);
+      const result = await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       expect(result.success).toBe(true);
       expect(mockPrisma.workspace.create).toHaveBeenCalled();
@@ -273,7 +272,7 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const oauthUser = {
         id: 'google-user-different',
@@ -288,7 +287,7 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      const result = await service.linkOAuthAccount(oauthUser, oauthAccount);
+      const result = await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       expect(result.success).toBe(true);
       expect(result.action).toBe('existing');
@@ -308,14 +307,15 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      const result = await service.linkOAuthAccount(userWithoutEmail, oauthAccount);
+      const result = await service.linkOAuthAccount(userWithoutEmail as any, oauthAccount as any);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('No email provided');
     });
 
     it('should handle database errors gracefully', async () => {
-      mockPrisma.user.findUnique.mockRejectedValue(new Error('Database connection failed'));
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      (mockPrisma.user.findUnique as jest.Mock).mockRejectedValue(new Error('Database connection failed'));
 
       const oauthUser = {
         id: 'oauth-user',
@@ -329,10 +329,12 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      const result = await service.linkOAuthAccount(oauthUser, oauthAccount);
+      const result = await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Database connection failed');
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
 
     it('should merge user data intelligently', async () => {
@@ -344,13 +346,13 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique
+      (mockPrisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: null }); // For updateUserWithOAuthData
       
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspaceMember.count.mockResolvedValue(1);
+      (mockPrisma.account.create as jest.Mock).mockResolvedValue({});
+      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.workspaceMember.count as jest.Mock).mockResolvedValue(1);
 
       const oauthUser = {
         id: 'oauth-user',
@@ -365,7 +367,7 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      await service.linkOAuthAccount(oauthUser, oauthAccount);
+      await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       // Should update with OAuth name since user doesn't have one
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
@@ -388,13 +390,13 @@ describe('Comprehensive Account Linking', () => {
         workspaces: [{ id: 'workspace-1' }]
       };
 
-      mockPrisma.user.findUnique
+      (mockPrisma.user.findUnique as jest.Mock)
         .mockResolvedValueOnce(existingUser)
         .mockResolvedValueOnce({ name: 'Existing Name' }); // For updateUserWithOAuthData
       
-      mockPrisma.account.create.mockResolvedValue({});
-      mockPrisma.user.update.mockResolvedValue({});
-      mockPrisma.workspaceMember.count.mockResolvedValue(1);
+      (mockPrisma.account.create as jest.Mock).mockResolvedValue({});
+      (mockPrisma.user.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.workspaceMember.count as jest.Mock).mockResolvedValue(1);
 
       const oauthUser = {
         id: 'oauth-user',
@@ -409,7 +411,7 @@ describe('Comprehensive Account Linking', () => {
         type: 'oauth',
       };
 
-      await service.linkOAuthAccount(oauthUser, oauthAccount);
+      await service.linkOAuthAccount(oauthUser as any, oauthAccount as any);
 
       // Should NOT update name since user already has one
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
@@ -432,7 +434,7 @@ describe('Comprehensive Account Linking', () => {
         workspaces: []
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const result = await service.resolveAccountConflict('user@example.com', 'different-user-id');
 
@@ -449,7 +451,7 @@ describe('Comprehensive Account Linking', () => {
         workspaces: []
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+      (mockPrisma.user.findUnique as jest.Mock).mockResolvedValue(existingUser);
 
       const result = await service.resolveAccountConflict('user@example.com', 'user-123');
 
