@@ -760,3 +760,171 @@ describe('StepBrand Component', () => {
     });
   });
 });
+  // Test 8: Country field behavior (new tests for the fix)
+  describe('Country Field Behavior', () => {
+    beforeEach(() => {
+      // Mock successful fetch response with country data
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          brandName: 'Extracted Brand',
+          twitterHandle: 'extracted_twitter',
+          linkedinHandle: 'https://linkedin.com/company/extracted',
+          country: 'United States',
+          url: 'https://example.com',
+        }),
+      });
+    });
+
+    it('preserves manually edited country when URL changes', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // First, manually edit the country field
+      const countryInput = screen.getByLabelText(/country/i);
+      fireEvent.change(countryInput, { target: { value: 'Canada' } });
+      
+      // Wait for the change to be processed
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Canada')).toBeInTheDocument();
+      });
+      
+      // Now change the URL (which would normally trigger auto-fill)
+      const urlInput = screen.getByLabelText(/website url/i);
+      fireEvent.change(urlInput, { target: { value: 'https://example.com' } });
+      
+      // Fast-forward past debounce time
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+      
+      // Wait for fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+      
+      // Country should NOT be overwritten (should remain Canada, not United States)
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Canada')).toBeInTheDocument();
+        expect(screen.queryByDisplayValue('United States')).not.toBeInTheDocument();
+      });
+      
+      jest.useRealTimers();
+    });
+
+    it('updates country when URL changes if not manually edited', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // First URL fetch with country data
+      const urlInput = screen.getByLabelText(/website url/i);
+      fireEvent.change(urlInput, { target: { value: 'https://first-example.com' } });
+      
+      // Fast-forward past debounce time
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+      
+      // Wait for first fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+      
+      // Country should be auto-filled from first URL
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('United States')).toBeInTheDocument();
+      });
+      
+      // Clear mock for second fetch
+      (global.fetch as jest.Mock).mockClear();
+      // Mock different country for second URL
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          brandName: 'Different Brand',
+          twitterHandle: 'different_twitter',
+          linkedinHandle: 'https://linkedin.com/company/different',
+          country: 'United Kingdom',
+          url: 'https://second-example.com',
+        }),
+      });
+      
+      // Change to second URL (country not manually edited, so should update)
+      fireEvent.change(urlInput, { target: { value: 'https://second-example.com' } });
+      
+      // Fast-forward past debounce time
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+      
+      // Wait for second fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+      
+      // Country SHOULD be updated (not manually edited)
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('United Kingdom')).toBeInTheDocument();
+        expect(screen.queryByDisplayValue('United States')).not.toBeInTheDocument();
+      });
+      
+      jest.useRealTimers();
+    });
+
+    it('preserves manually edited country across multiple URL changes', async () => {
+      jest.useFakeTimers();
+      render(<StepBrandTestWrapper />);
+      
+      // Open advanced section to see country field
+      const advancedButton = screen.getByText(/brand social link/i);
+      fireEvent.click(advancedButton);
+      
+      // Manually edit country first
+      const countryInput = screen.getByLabelText(/country/i);
+      fireEvent.change(countryInput, { target: { value: 'France' } });
+      
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('France')).toBeInTheDocument();
+      });
+      
+      // Change URL multiple times
+      const urlInput = screen.getByLabelText(/website url/i);
+      
+      // First URL change
+      fireEvent.change(urlInput, { target: { value: 'https://first-example.com' } });
+      act(() => { jest.advanceTimersByTime(1500); });
+      
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+      
+      // Country should still be France
+      expect(screen.getByDisplayValue('France')).toBeInTheDocument();
+      
+      // Clear mock for second fetch
+      (global.fetch as jest.Mock).mockClear();
+      
+      // Second URL change
+      fireEvent.change(urlInput, { target: { value: 'https://second-example.com' } });
+      act(() => { jest.advanceTimersByTime(1500); });
+      
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+      
+      // Country should STILL be France (preserved across multiple changes)
+      expect(screen.getByDisplayValue('France')).toBeInTheDocument();
+      
+      jest.useRealTimers();
+    });
+  });

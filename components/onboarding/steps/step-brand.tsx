@@ -66,9 +66,14 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   // Track if brandName was set by OAuth (allows metadata to overwrite)
   const oauthApplied = useRef(false);
   // Track if user has manually edited fields (prevents overwriting)
-  const userEditedBrandName = useRef(false);
-  const userEditedTwitterHandle = useRef(false);
-  const userEditedLinkedinHandle = useRef(false);
+  const userEditedFields = useRef<Record<keyof BrandData, boolean>>({
+    brandName: false,
+    brandAliases: false,
+    website: false,
+    twitterHandle: false,
+    linkedinHandle: false,
+    country: false,
+  });
   // Keep latest data in a ref to avoid stale closures in fetchMetadata
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -112,28 +117,28 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
         
         // Always replace values from API response unless user has manually edited the field
         // Brand name from URL takes priority over OAuth name, but not over user edits
-        if (metadata.brandName && !userEditedBrandName.current) {
+        if (metadata.brandName && !userEditedFields.current.brandName) {
           newData.brandName = metadata.brandName;
           autoFilled.push("brand name");
         }
         
         // Always replace social handles from API response unless user has manually edited them
-        if (!userEditedTwitterHandle.current) {
+        if (!userEditedFields.current.twitterHandle) {
           newData.twitterHandle = metadata.twitterHandle;
           if (metadata.twitterHandle) {
             autoFilled.push("Twitter handle");
           }
         }
         
-        if (!userEditedLinkedinHandle.current) {
+        if (!userEditedFields.current.linkedinHandle) {
           newData.linkedinHandle = metadata.linkedinHandle;
           if (metadata.linkedinHandle) {
             autoFilled.push("LinkedIn URL");
           }
         }
 
-        // Auto-fill country if available
-        if (metadata.country && !current.country) {
+        // Auto-fill country if available (unless user has manually edited it)
+        if (metadata.country && !userEditedFields.current.country) {
           const foundCountry = findCountry(metadata.country);
           if (foundCountry) {
             newData.country = foundCountry.name;
@@ -192,13 +197,10 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
   }, [oauthName, data.brandName, onChange, data]);
 
   const set = (field: keyof BrandData) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (field === "brandName") {
-      userEditedBrandName.current = true;
-    } else if (field === "twitterHandle") {
-      userEditedTwitterHandle.current = true;
-    } else if (field === "linkedinHandle") {
-      userEditedLinkedinHandle.current = true;
-    } else if (field === "country") {
+    // Mark field as manually edited
+    userEditedFields.current[field] = true;
+    
+    if (field === "country") {
       // Handle country input for search
       const value = e.target.value;
       setCountryDisplay(value);
@@ -222,11 +224,15 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
       }
       return;
     }
+    
     onChange({ ...data, [field]: e.target.value });
   };
 
   // Handle country selection from dropdown
   const handleCountrySelect = (country: CountryOption) => {
+    // Mark country as manually edited when selected from dropdown
+    userEditedFields.current.country = true;
+    
     onChange({ ...data, country: country.name });
     setCountryDisplay(country.name);
     setShowCountryDropdown(false);
@@ -366,11 +372,11 @@ export function StepBrand({ data, onChange, oauthName }: StepBrandProps) {
             >
               ?
             </button>
-            {/* {isCountryAutoDetected && (
+            {isCountryAutoDetected && (
               <span className="ml-2 text-xs font-normal text-green-600">
                 ✓ Auto-detected
               </span>
-            )} */}
+            )}
           </div>
           <div className="relative" ref={countryDropdownRef}>
             <div className="relative">
