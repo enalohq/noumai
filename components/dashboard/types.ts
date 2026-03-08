@@ -168,10 +168,10 @@ export type AppState = {
 };
 
 export const tabs = [
-  "Prompts",
   "Competitor Battlecards",
-  "Persona Fan-Out",
+  "Prompts",
   "Prompt Explorer",
+  "Persona Fan-Out",
   "Responses",
   "Visibility Analytics",
   "Citations",

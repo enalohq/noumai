@@ -87,7 +87,7 @@ const defaultState: AppState = {
 
 export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {}) {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<TabKey>("Prompts");
+  const [activeTab, setActiveTab] = useState<TabKey>("Competitor Battlecards");
   const [state, setState] = useState<AppState>(demoMode ? DEMO_STATE : defaultState);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(demoMode ? "Demo mode — read-only preview" : "");
