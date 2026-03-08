@@ -55,7 +55,7 @@ export function generateRecommendations(state: AppState): Recommendation[] {
       description:
         "You haven't scanned any AI models yet. Run a prompt from the Prompt Hub to see how your brand appears in AI responses.",
       actions: [
-        "Go to the Prompt Hub tab",
+        "Go to the Prompts menu",
         "Enter a query your customers would ask an AI model",
         "Click Run to see your visibility score",
       ],
