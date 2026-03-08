@@ -5,13 +5,13 @@
 
 import { BrandData } from "@/components/onboarding/steps/step-brand";
 import { MarketData } from "@/components/onboarding/steps/step-market";
-import { CompetitorsData } from "@/components/onboarding/steps/step-competitors";
+import { CompetitorData } from "@/components/onboarding/steps/step-competitors";
 import { PromptsData } from "@/components/onboarding/steps/step-prompts";
 
 export interface OnboardingState {
   brand: BrandData;
   market: MarketData;
-  competitors: CompetitorsData;
+  competitors: CompetitorData[];
   prompts: PromptsData;
 }
 

@@ -24,7 +24,9 @@ interface MockStepProps {
     brandName?: string;
     website?: string;
     industry?: string;
+    brandDescription?: string;
     targetKeywords?: string;
+    country?: string;
   };
   onChange: (data: any) => void;
 }
@@ -54,14 +56,27 @@ jest.mock('@/components/onboarding/steps/step-market', () => ({
         value={data.industry || ''} 
         onChange={(e) => onChange({ ...data, industry: e.target.value })} 
       />
+      <textarea 
+        aria-label="Brand Description" 
+        value={data.brandDescription || ''} 
+        onChange={(e) => onChange({ ...data, brandDescription: e.target.value })} 
+      />
     </div>
   ),
 }));
 
 jest.mock('@/components/onboarding/steps/step-competitors', () => ({
-  StepCompetitors: () => (
+  StepCompetitors: ({ brandContext }: any) => (
     <div data-testid="step-competitors">
       <input placeholder="Competitors" />
+      {brandContext && (
+        <div data-testid="brand-context-preview">
+          <span data-testid="context-brand-name">{brandContext.brandName}</span>
+          <span data-testid="context-website">{brandContext.website}</span>
+          <span data-testid="context-industry">{brandContext.industry}</span>
+          <span data-testid="context-country">{brandContext.country}</span>
+        </div>
+      )}
     </div>
   ),
 }));
@@ -76,9 +91,10 @@ jest.mock('@/components/onboarding/steps/step-keywords', () => ({
 }));
 
 jest.mock('@/components/onboarding/steps/step-prompts', () => ({
-  StepPrompts: () => (
+  StepPrompts: ({ brandName }: any) => (
     <div data-testid="step-prompts">
       <input placeholder="Prompts" />
+      <span data-testid="prompts-brand-name">{brandName}</span>
     </div>
   ),
 }));
@@ -89,7 +105,7 @@ jest.mock('@/components/onboarding/dashboard-preview', () => ({
 
 // Import component AFTER mocks are set up
 import { OnboardingWizard } from '@/components/onboarding/onboarding-wizard';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 
@@ -418,6 +434,88 @@ describe('OnboardingWizard', () => {
     });
   });
 
+  describe('Wizard Data Pipeline', () => {
+    it('should correctly pass brand data from Step 1 to Step 3 and Step 5 contexts', async () => {
+      const user = userEvent.setup();
+      
+      // Step 0 load
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: () => Promise.resolve({ currentStep: 0 }),
+      });
+
+      // Step 1 save
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      });
+
+      // Auto-fill PATCH (step 1 -> 2 transition)
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      });
+
+      // Auto-fill GET
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ workspace: { industry: 'Testing' } }),
+      });
+
+      // Step 2 save
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      });
+
+      render(<OnboardingWizard toastService={mockToastService} />);
+
+      // Step 1: Fill Brand Details
+      const brandNameInput = await screen.findByRole('textbox', { name: /Brand Name/i });
+      const websiteInput = screen.getByRole('textbox', { name: /Website/i });
+      await user.type(brandNameInput, 'Pipeline Brand');
+      await user.type(websiteInput, 'https://pipeline.com');
+      
+      const continueButton = screen.getByRole('button', { name: /Continue/i });
+      await user.click(continueButton);
+
+      // Step 2: Fill Market Details
+      const industryInput = await screen.findByPlaceholderText('Industry');
+      const descriptionInput = screen.getByRole('textbox', { name: /Brand Description/i });
+      await user.type(industryInput, 'Testing Industry');
+      await user.type(descriptionInput, 'Testing Description');
+      await user.click(continueButton);
+
+      // Step 3: Verify context received from Step 1 and Step 2
+      await screen.findByTestId('step-competitors');
+      expect(screen.getByTestId('context-brand-name')).toHaveTextContent('Pipeline Brand');
+      expect(screen.getByTestId('context-website')).toHaveTextContent('https://pipeline.com');
+      expect(screen.getByTestId('context-industry')).toHaveTextContent('Testing Industry');
+
+      // Proceed through Step 3 and 4...
+      // Step 3 save
+      mockFetch.mockResolvedValueOnce({ status: 200, ok: true, json: () => Promise.resolve({}) });
+      await user.click(continueButton);
+
+      // Step 4: Verify we are on Keywords
+      expect(await screen.findByText('Track Keywords')).toBeInTheDocument();
+      const keywordsInput = screen.getByRole('textbox', { name: /Target Keywords/i });
+      await user.type(keywordsInput, 'test');
+      
+      // Step 4 save (saves to step 3 API)
+      mockFetch.mockResolvedValueOnce({ status: 200, ok: true, json: () => Promise.resolve({}) });
+      await user.click(continueButton);
+
+      // Step 5: Verify brandName context passed to Prompts
+      expect(await screen.findByText('Starter Prompts')).toBeInTheDocument();
+      expect(screen.getByTestId('prompts-brand-name')).toHaveTextContent('Pipeline Brand');
+    });
+  });
+
   describe('Error Handling', () => {
     it('should display specific server error message on save failure', async () => {
       const user = userEvent.setup();
@@ -475,8 +573,8 @@ describe('OnboardingWizard', () => {
       expect(await screen.findByText(/Network error. Please check your internet connection./i)).toBeInTheDocument();
     });
 
-    it('should handle 401 unauthorized response', async () => {
-      mockFetch.mockResolvedValue({
+    it('should handle 401 unauthorized response on mount', async () => {
+      mockFetch.mockResolvedValueOnce({
         status: 401,
         json: () => Promise.resolve({}),
       });
@@ -484,7 +582,37 @@ describe('OnboardingWizard', () => {
       render(<OnboardingWizard toastService={mockToastService} />);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalled();
+        expect(signOut).toHaveBeenCalledWith({ callbackUrl: '/auth/signin' });
+      });
+    });
+
+    it('should handle 401 unauthorized response during save', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: () => Promise.resolve({ currentStep: 0 }),
+      });
+
+      render(<OnboardingWizard toastService={mockToastService} />);
+
+      expect(await screen.findByText('Your Brand')).toBeInTheDocument();
+
+      const brandNameInput = screen.getByRole('textbox', { name: /Brand Name/i });
+      const websiteInput = screen.getByRole('textbox', { name: /Website/i });
+      await user.type(brandNameInput, 'Test Brand');
+      await user.type(websiteInput, 'https://test.com');
+
+      // Mock 401 on save
+      mockFetch.mockResolvedValueOnce({
+        status: 401,
+        json: () => Promise.resolve({}),
+      });
+
+      const continueButton = screen.getByRole('button', { name: /Continue/i });
+      await user.click(continueButton);
+
+      await waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith({ callbackUrl: '/auth/signin' });
       });
     });
 
