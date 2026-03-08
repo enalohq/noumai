@@ -1,5 +1,24 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
+import util from 'util';
+import { ReadableStream } from 'stream/web';
+
+// Set test environment
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
+process.env.NEXTAUTH_URL = 'http://localhost:3000';
+process.env.NEXTAUTH_SECRET = 'test-secret';
+
+// Add TextEncoder/TextDecoder polyfills for Node.js environment
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = util.TextEncoder;
+  global.TextDecoder = util.TextDecoder;
+}
+
+// Add ReadableStream polyfill for LangChain compatibility
+if (typeof global.ReadableStream === 'undefined') {
+  global.ReadableStream = ReadableStream;
+}
 
 // Add Web APIs that are missing in Jest environment
 if (typeof Request === 'undefined') {
@@ -13,6 +32,18 @@ if (typeof Request === 'undefined') {
           this.headers.set(key, value);
         });
       }
+      this._body = init?.body;
+    }
+
+    async json() {
+      if (typeof this._body === 'string') {
+        return JSON.parse(this._body);
+      }
+      return this._body;
+    }
+
+    async text() {
+      return this._body?.toString() || '';
     }
   };
 }
@@ -70,17 +101,70 @@ jest.mock('next/server', () => ({
     }
   },
   NextResponse: {
-    json: (data, init) => ({
-      ...init,
-      json: () => Promise.resolve(data),
-    }),
+    json: (data, init) => {
+      const response = new Response(JSON.stringify(data), {
+        status: init?.status || 200,
+        headers: init?.headers || {},
+      });
+      response.status = init?.status || 200;
+      return response;
+    },
   },
 }));
 
-// Mock environment variables
-process.env.NEXTAUTH_URL = 'http://localhost:3000';
-process.env.NEXTAUTH_SECRET = 'test-secret';
-process.env.DATABASE_URL = 'file:./test.db';
+// Mock Prisma before any imports
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      upsert: jest.fn(),
+    },
+    workspace: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      upsert: jest.fn(),
+    },
+    workspaceMember: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      upsert: jest.fn(),
+    },
+    competitor: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+      upsert: jest.fn(),
+    },
+    trackedPrompt: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      upsert: jest.fn(),
+    },
+    $transaction: jest.fn(),
+    $disconnect: jest.fn(),
+  },
+}));
 
 // Clear all mocks after each test
 afterEach(() => {

@@ -75,7 +75,7 @@ describe("CompetitorFetcher", () => {
 
     it("should sort results by confidence (highest first)", async () => {
       const mockFetcher1 = createMockFetcher("fetcher1", [
-        { name: "Low Confidence", url: "https://low.com", type: "direct", confidence: 0.3, source: "fetcher1" },
+        { name: "Low Confidence", url: "https://low.com", type: "direct", confidence: 0.55, source: "fetcher1" },
         { name: "Medium Confidence", url: "https://medium.com", type: "direct", confidence: 0.6, source: "fetcher1" },
       ]);
       const mockFetcher2 = createMockFetcher("fetcher2", [
@@ -88,6 +88,22 @@ describe("CompetitorFetcher", () => {
       expect(result[0].name).toBe("High Confidence");
       expect(result[1].name).toBe("Medium Confidence");
       expect(result[2].name).toBe("Low Confidence");
+    });
+
+    it("should filter out competitors with confidence below 50%", async () => {
+      const mockFetcher1 = createMockFetcher("fetcher1", [
+        { name: "Very Low Confidence", url: "https://verylow.com", type: "direct", confidence: 0.3, source: "fetcher1" },
+        { name: "Below Threshold", url: "https://below.com", type: "direct", confidence: 0.49, source: "fetcher1" },
+        { name: "At Threshold", url: "https://at.com", type: "direct", confidence: 0.51, source: "fetcher1" },
+        { name: "Above Threshold", url: "https://above.com", type: "direct", confidence: 0.6, source: "fetcher1" },
+      ]);
+
+      const customFetcher = new CompetitorFetcher([mockFetcher1]);
+      const result = await customFetcher.fetchAll({ name: "TestBrand" });
+
+      // Only competitors with confidence >= 0.5 should be included
+      expect(result).toHaveLength(2);
+      expect(result.map((c) => c.name)).toEqual(["Above Threshold", "At Threshold"]);
     });
 
     it("should handle fetcher errors gracefully", async () => {

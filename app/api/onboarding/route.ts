@@ -165,14 +165,14 @@ export async function PATCH(request: NextRequest) {
     await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 1 } });
 
   } else if (step === 2) {
-    const { industry, brandDescription, brandName, brandAliases } = body;
+    const { industry, brandDescription, brandName, brandAliases, website, country } = body;
     
     // Auto-fill industry and description with a single LLM call if not provided
     let finalIndustry = industry;
     let finalDescription = brandDescription;
     
     if ((!industry || !brandDescription) && brandName) {
-      const filled = await autoFillMarket({ brandName, brandAliases });
+      const filled = await autoFillMarket({ brandName, brandAliases, website, country });
       finalIndustry = filled.industry;
       finalDescription = filled.description;
     }
@@ -187,23 +187,72 @@ export async function PATCH(request: NextRequest) {
     await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 2 } });
 
   } else if (step === 3) {
-    const { targetKeywords, competitors } = body;
+    const { targetKeywords, competitors, autoDiscover } = body;
+
+    // Get existing workspace data for auto-discovery
+    let autoDiscoveredCompetitors: Array<{ name: string; url?: string | null; type: string }> = [];
+
+    if (autoDiscover === true) {
+      try {
+        // Get current workspace data for brand context
+        const workspace = await prisma.workspace.findUnique({
+          where: { id: workspaceId },
+          select: { brandName: true, website: true, industry: true },
+        });
+
+        if (workspace?.brandName) {
+          // Call competitor discovery API
+          const discoverRes = await fetch(
+            `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/competitors/discover`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                cookie: request.headers.get("cookie") || "",
+              },
+              body: JSON.stringify({
+                brandName: workspace.brandName,
+                website: workspace.website,
+                industry: workspace.industry,
+              }),
+            }
+          );
+
+          if (discoverRes.ok) {
+            const { competitors: discovered } = await discoverRes.json();
+            autoDiscoveredCompetitors = discovered.map((c: { name: string; url?: string; type: string }) => ({
+              name: c.name,
+              url: c.url || null,
+              type: c.type || "direct",
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("[onboarding step 3] Auto-discovery error:", error);
+        // Continue without auto-discovered competitors
+      }
+    }
+
+    // Merge manual and auto-discovered competitors
+    const allCompetitors = [
+      ...(Array.isArray(competitors) ? competitors : []),
+      ...autoDiscoveredCompetitors,
+    ];
+
     await prisma.$transaction([
       prisma.competitor.deleteMany({ where: { workspaceId } }),
-      ...(Array.isArray(competitors)
-        ? competitors
-            .filter((c: { name?: string }) => c.name?.trim())
-            .map((c: { name: string; url?: string; type?: string }) =>
-              prisma.competitor.create({
-                data: {
-                  workspaceId,
-                  name: c.name.trim(),
-                  url: c.url?.trim() || null,
-                  type: c.type ?? "direct",
-                },
-              })
-            )
-        : []),
+      ...allCompetitors
+        .filter((c: { name?: string }) => c.name?.trim())
+        .map((c: { name: string; url?: string | null; type?: string }) =>
+          prisma.competitor.create({
+            data: {
+              workspaceId,
+              name: c.name.trim(),
+              url: typeof c.url === "string" ? c.url.trim() : null,
+              type: c.type ?? "direct",
+            },
+          })
+        ),
       prisma.workspace.update({
         where: { id: workspaceId },
         data: { targetKeywords: targetKeywords ?? undefined },

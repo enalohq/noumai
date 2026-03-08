@@ -6,21 +6,31 @@ import { useSession, signOut } from "next-auth/react";
 import { DashboardPreview } from "./dashboard-preview";
 import { StepBrand, type BrandData } from "./steps/step-brand";
 import { StepMarket, type MarketData } from "./steps/step-market";
-import { StepCompetitors, type CompetitorsData, type Competitor } from "./steps/step-competitors";
+import { StepCompetitors, type CompetitorData } from "./steps/step-competitors";
+import { StepKeywords, type KeywordsData } from "./steps/step-keywords";
 import { StepPrompts, type PromptsData } from "./steps/step-prompts";
 import { useToast } from "@/components/ui/toast";
+import { useAutoFillMarket } from "./hooks/useAutoFillMarket";
+
+type ToastService = ReturnType<typeof useToast>;
+
+interface OnboardingWizardProps {
+  toastService?: ToastService;
+}
 
 const STEPS = [
   { number: 1, title: "Your Brand", description: "Tell us about your brand" },
   { number: 2, title: "Your Market", description: "Define your industry and positioning" },
   { number: 3, title: "Track Competitors", description: "Set up competitor monitoring" },
-  { number: 4, title: "Starter Prompts", description: "Choose prompts to track your AI visibility" },
+  { number: 4, title: "Track Keywords", description: "Enter keywords to monitor" },
+  { number: 5, title: "Starter Prompts", description: "Choose prompts to track your AI visibility" },
 ];
 
 interface OnboardingState {
   brand: BrandData;
   market: MarketData;
-  competitors: CompetitorsData;
+  competitors: { targetKeywords: string; competitors: CompetitorData[] };
+  keywords: KeywordsData;
   prompts: PromptsData;
 }
 
@@ -28,13 +38,19 @@ const DEFAULT_STATE: OnboardingState = {
   brand: { brandName: "", brandAliases: "", website: "", twitterHandle: "", linkedinHandle: "", country: "" },
   market: { industry: "", brandDescription: "" },
   competitors: { targetKeywords: "", competitors: [] },
+  keywords: { targetKeywords: "" },
   prompts: { selectedPrompts: [] },
 };
 
-export function OnboardingWizard() {
+export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
   const router = useRouter();
   const { data: session, update: updateSession } = useSession();
-  const { showToast, ToastContainer } = useToast();
+  
+  // Always call the hook (required by React rules), but use provided service if available
+  const defaultToastService = useToast();
+  const { showToast, ToastContainer } = toastService ?? defaultToastService;
+
+  const { autoFillMarket } = useAutoFillMarket();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [state, setState] = useState<OnboardingState>(DEFAULT_STATE);
@@ -72,7 +88,10 @@ export function OnboardingWizard() {
             },
             competitors: {
               targetKeywords: ws.targetKeywords || "",
-              competitors: (ws.competitors as Competitor[]) || [],
+              competitors: (ws.competitors as CompetitorData[]) || [],
+            },
+            keywords: {
+              targetKeywords: ws.targetKeywords || "",
             },
           }));
         }
@@ -121,13 +140,15 @@ export function OnboardingWizard() {
     }
   };
 
+
   // Helper to get step data
   const getStepData = (step: number) => {
     switch (step) {
       case 1: return state.brand;
       case 2: return state.market;
       case 3: return state.competitors;
-      case 4: return { prompts: state.prompts.selectedPrompts };
+      case 4: return state.keywords;
+      case 5: return { prompts: state.prompts.selectedPrompts };
       default: return {};
     }
   };
@@ -142,41 +163,30 @@ export function OnboardingWizard() {
         }
         await saveStep(1, state.brand);
         showToast("Step 1 completed! Moving to market details.", "success");
+        
+        // Always clear market data when moving to step 2 to ensure fresh auto-fill
+        setState((s) => ({
+          ...s,
+          market: { industry: "", brandDescription: "" },
+        }));
         setCurrentStep(2);
         
-        // Auto-fill industry and description if empty
-        if (!state.market.industry || !state.market.brandDescription) {
-          try {
-            const res = await fetch("/api/onboarding", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                step: 2,
-                industry: state.market.industry || undefined,
-                brandDescription: state.market.brandDescription || undefined,
-                brandName: state.brand.brandName,
-                brandAliases: state.brand.brandAliases,
-              }),
-            });
-            
-            if (res.ok) {
-              // Fetch the updated data
-              const onboardingRes = await fetch("/api/onboarding");
-              const data = await onboardingRes.json();
-              if (data.workspace) {
-                setState((s) => ({
-                  ...s,
-                  market: {
-                    industry: data.workspace.industry || s.market.industry,
-                    brandDescription: data.workspace.brandDescription || s.market.brandDescription,
-                  },
-                }));
-              }
-            }
-          } catch (error) {
-            console.error("Auto-fill error:", error);
-            // Continue even if auto-fill fails
-          }
+        // Auto-fill industry and description
+        const autoFillResult = await autoFillMarket({
+          brandName: state.brand.brandName,
+          brandAliases: state.brand.brandAliases,
+          website: state.brand.website,
+          country: state.brand.country,
+        });
+
+        if (autoFillResult) {
+          setState((s) => ({
+            ...s,
+            market: {
+              industry: autoFillResult.industry,
+              brandDescription: autoFillResult.brandDescription,
+            },
+          }));
         }
       } else if (currentStep === 2) {
         if (!state.market.industry || !state.market.brandDescription.trim()) {
@@ -188,9 +198,18 @@ export function OnboardingWizard() {
         setCurrentStep(3);
       } else if (currentStep === 3) {
         await saveStep(3, state.competitors);
-        showToast("Step 3 completed! Moving to prompt selection.", "success");
+        showToast("Step 3 completed! Moving to keyword tracking.", "success");
         setCurrentStep(4);
       } else if (currentStep === 4) {
+        if (!state.keywords.targetKeywords.trim()) {
+          setError("Please enter at least one target keyword.");
+          return;
+        }
+        // Save keywords to step 3 (targetKeywords field in competitors object)
+        await saveStep(3, { ...state.competitors, targetKeywords: state.keywords.targetKeywords });
+        showToast("Step 4 completed! Moving to prompt selection.", "success");
+        setCurrentStep(5);
+      } else if (currentStep === 5) {
         await saveStep(4, { prompts: state.prompts.selectedPrompts });
         showToast("Onboarding complete! Welcome to NoumAI.", "success", 4000);
         updateSession().catch(() => {});
@@ -232,7 +251,12 @@ export function OnboardingWizard() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-th-bg">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-th-accent border-t-transparent" />
+        <div 
+          className="h-8 w-8 animate-spin rounded-full border-4 border-th-accent border-t-transparent" 
+          data-testid="loading-spinner"
+          role="status"
+          aria-label="Loading"
+        />
       </div>
     );
   }
@@ -260,11 +284,11 @@ export function OnboardingWizard() {
 
           {/* Step progress */}
           <div className="px-7 pt-6">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center w-full">
               {STEPS.map((step, i) => (
-                <div key={step.number} className="flex items-center gap-1.5">
+                <div key={step.number} className={`flex items-center ${i < STEPS.length - 1 ? "flex-1" : ""}`}>
                   <div
-                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
                       step.number < currentStep
                         ? "bg-th-accent text-white"
                         : step.number === currentStep
@@ -282,7 +306,7 @@ export function OnboardingWizard() {
                   </div>
                   {i < STEPS.length - 1 && (
                     <div
-                      className={`h-px w-6 transition-colors ${
+                      className={`h-px flex-1 mx-2 transition-colors ${
                         step.number < currentStep ? "bg-th-accent" : "bg-th-border"
                       }`}
                     />
@@ -323,11 +347,25 @@ export function OnboardingWizard() {
             )}
             {currentStep === 3 && (
               <StepCompetitors
-                data={state.competitors}
-                onChange={(competitors) => setState((s) => ({ ...s, competitors }))}
+                competitors={state.competitors.competitors}
+                onChange={(competitors) =>
+                  setState((s) => ({ ...s, competitors: { ...s.competitors, competitors } }))
+                }
+                brandContext={{
+                  brandName: state.brand.brandName,
+                  website: state.brand.website,
+                  industry: state.market.industry,
+                  country: state.brand.country,
+                }}
               />
             )}
             {currentStep === 4 && (
+              <StepKeywords
+                data={state.keywords || { targetKeywords: "" }}
+                onChange={(keywords) => setState((s) => ({ ...s, keywords }))}
+              />
+            )}
+            {currentStep === 5 && (
               <StepPrompts
                 brandName={state.brand.brandName}
                 data={state.prompts}

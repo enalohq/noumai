@@ -1,63 +1,40 @@
 /**
- * MSW Handlers - Mock Service Worker request handlers
- * Provides centralized HTTP mocking for tests
+ * MSW Request Handlers
+ * Defines mock API responses for testing
  */
 
 import { http, HttpResponse } from 'msw';
 
 export const handlers = [
-  // Competitor discovery endpoint
-  http.post('/api/competitors/discover', async ({ request }) => {
-    const body = await request.json() as any;
-
-    if (!body.brandName) {
-      return HttpResponse.json(
-        { error: 'brandName is required' },
-        { status: 400 }
-      );
-    }
-
+  // Onboarding API - GET
+  http.get('/api/onboarding', () => {
     return HttpResponse.json({
-      competitors: [],
-      meta: {
-        total: 0,
-        sources: [],
-      },
+      onboardingCompleted: false,
+      currentStep: 1,
+      suggestedPrompts: [],
+      savedStarterPrompts: [],
+      workspace: null,
     });
   }),
 
-  // Metadata scraping endpoint
-  http.post('/api/scrape-metadata', async ({ request }) => {
-    const body = await request.json() as any;
+  // Onboarding API - PATCH
+  http.patch('/api/onboarding', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json({ success: true });
+  }),
 
-    if (!body.url) {
-      return HttpResponse.json(
-        { error: 'url is required' },
-        { status: 400 }
-      );
-    }
+  // Competitor Discovery API
+  http.post('/api/competitors/discover', () => {
+    return HttpResponse.json({
+      competitors: [],
+    });
+  }),
 
+  // Scrape Metadata API
+  http.post('/api/scrape-metadata', () => {
     return HttpResponse.json({
       title: 'Test Page',
       description: 'Test description',
-      image: 'https://example.com/image.jpg',
-    });
-  }),
-
-  // Onboarding endpoint
-  http.post('/api/onboarding', async ({ request }) => {
-    const body = await request.json() as any;
-
-    if (!body.brandName) {
-      return HttpResponse.json(
-        { error: 'brandName is required' },
-        { status: 400 }
-      );
-    }
-
-    return HttpResponse.json({
-      success: true,
-      workspaceId: 'workspace-123',
     });
   }),
 ];

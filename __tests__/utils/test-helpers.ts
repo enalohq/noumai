@@ -69,6 +69,55 @@ export function createMockRequest(body: any) {
 }
 
 /**
+ * Create a proper Next.js Request object for API route testing
+ */
+export function createNextRequest(options: {
+  method?: string;
+  body?: any;
+  headers?: Record<string, string>;
+  url?: string;
+} = {}) {
+  const method = options.method || 'GET';
+  const url = options.url || 'http://localhost:3000/api/test';
+  const headers = new Headers(options.headers || {});
+  
+  const bodyData = options.body ? JSON.stringify(options.body) : undefined;
+  
+  const request = new Request(url, {
+    method,
+    headers,
+    body: bodyData,
+  }) as any;
+
+  // Override json() to return the parsed body
+  if (options.body) {
+    request.json = async () => options.body;
+  } else {
+    request.json = async () => ({});
+  }
+
+  return request;
+}
+
+/**
+ * Create a proper Next.js Response object for API route testing
+ */
+export function createNextResponse(options: {
+  status?: number;
+  body?: any;
+  headers?: Record<string, string>;
+} = {}) {
+  const status = options.status || 200;
+  const body = options.body ? JSON.stringify(options.body) : undefined;
+  const headers = new Headers(options.headers || {});
+
+  return new Response(body, {
+    status,
+    headers,
+  });
+}
+
+/**
  * Create a mock Prisma user object
  */
 export function createMockUser(overrides = {}) {
@@ -82,14 +131,39 @@ export function createMockUser(overrides = {}) {
 }
 
 /**
- * Create a mock Prisma account object
+ * Setup common mocks for onboarding route tests
  */
-export function createMockAccount(overrides = {}) {
+export function setupOnboardingMocks() {
   return {
-    provider: 'google',
-    providerAccountId: 'google-123',
-    type: 'oauth' as const,
-    userId: 'user-123',
-    ...overrides,
+    workspace: {
+      update: jest.fn().mockResolvedValue({ id: 'workspace-123' }),
+      findUnique: jest.fn().mockResolvedValue({ id: 'workspace-123' }),
+      findFirst: jest.fn().mockResolvedValue({ id: 'workspace-123' }),
+      create: jest.fn().mockResolvedValue({ id: 'workspace-123' }),
+    },
+    workspaceMember: {
+      findFirst: jest.fn().mockResolvedValue({ workspaceId: 'workspace-123' }),
+      create: jest.fn().mockResolvedValue({ id: 'member-123' }),
+    },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'user-123',
+        name: 'Test User',
+        email: 'test@example.com',
+      }),
+      update: jest.fn().mockResolvedValue({ id: 'user-123', onboardingStep: 1 }),
+    },
+    competitor: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      create: jest.fn().mockResolvedValue({ id: 'competitor-123' }),
+    },
+    trackedPrompt: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue({ id: 'prompt-123' }),
+    },
+    $transaction: jest.fn((fn) => {
+      if (typeof fn === 'function') return fn();
+      return Promise.all(fn);
+    }),
   };
 }

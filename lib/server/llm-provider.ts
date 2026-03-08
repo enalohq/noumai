@@ -59,7 +59,7 @@ async function tryOllama(request: LlmRequest): Promise<LlmResponse | null> {
     const model = new ChatOllama({
       baseUrl,
       model: process.env.OLLAMA_MODEL || "llama3.1",
-      temperature: request.temperature ?? 0.2,
+      temperature: parseFloat(process.env.OLLAMA_TEMPERATURE || "0.5"),
       numPredict: request.maxTokens ?? 900,
       think: true, // Required for models like minimax-m2.5 that use thinking mode
       headers,

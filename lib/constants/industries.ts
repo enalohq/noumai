@@ -7,6 +7,7 @@ export const INDUSTRIES = [
   "Automotive / Transportation",
   "Baby / Kids / Parenting",
   "B2B / Business Services",
+  "Beauty / Personal Care",
   "Blockchain / Web3",
   "Construction / Architecture",
   "Consulting / Professional Services",

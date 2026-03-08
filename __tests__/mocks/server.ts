@@ -1,5 +1,6 @@
 /**
- * MSW Server Setup - Configures Mock Service Worker for tests
+ * MSW Server Setup
+ * Configures Mock Service Worker for testing
  */
 
 import { setupServer } from 'msw/node';

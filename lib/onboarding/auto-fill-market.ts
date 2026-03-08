@@ -8,6 +8,8 @@ import { callLlm } from "@/lib/server/llm-provider";
 export interface AutoFillMarketRequest {
   brandName: string;
   brandAliases?: string;
+  website?: string;
+  country?: string;
 }
 
 export interface AutoFillMarketResponse {
@@ -20,10 +22,12 @@ import { INDUSTRIES } from "@/lib/constants/industries";
 /**
  * Generate combined prompt for industry and description
  */
-function generateCombinedPrompt(brandName: string, brandAliases?: string): string {
+function generateCombinedPrompt(brandName: string, brandAliases?: string, website?: string, country?: string): string {
   const aliases = brandAliases && brandAliases.trim() ? ` (also known as: ${brandAliases.trim()})` : "";
+  const websiteInfo = website && website.trim() ? `\nWebsite: ${website.trim()}` : "";
+  const countryInfo = country && country.trim() ? `\nCountry: ${country.trim()}` : "";
   
-  return `Based on the brand name "${brandName}"${aliases}, provide:
+  return `Based on the brand name "${brandName}"${aliases}${websiteInfo}${countryInfo}, provide:
 
 1. Industry/Vertical: Choose from these options:
 ${INDUSTRIES.map(i => `- ${i}`).join('\n')}
@@ -40,7 +44,7 @@ DESCRIPTION: <1-2 sentence description>`;
  * Returns industry and description based on brand name
  */
 export async function autoFillMarket(request: AutoFillMarketRequest): Promise<AutoFillMarketResponse> {
-  const { brandName, brandAliases } = request;
+  const { brandName, brandAliases, website, country } = request;
 
   let finalIndustry = "Other";
   let finalDescription = "";
@@ -48,9 +52,9 @@ export async function autoFillMarket(request: AutoFillMarketRequest): Promise<Au
   if (brandName) {
     try {
       const result = await callLlm({
-        prompt: generateCombinedPrompt(brandName, brandAliases),
+        prompt: generateCombinedPrompt(brandName, brandAliases, website, country),
         maxTokens: 400,
-        temperature: 0.3,
+        temperature: 0.5,
       });
 
       // Parse the response - use [\s\S] to match newlines in description
@@ -58,7 +62,7 @@ export async function autoFillMarket(request: AutoFillMarketRequest): Promise<Au
       const descriptionMatch = result.text.match(/DESCRIPTION:\s*([\s\S]+)/i);
 
       if (industryMatch) {
-        let parsedIndustry = industryMatch[1].trim();
+        const parsedIndustry = industryMatch[1].trim();
         // Validate it's a known industry (case-insensitive match)
         const normalizedIndustry = INDUSTRIES.find(
           i => i.toLowerCase() === parsedIndustry.toLowerCase()

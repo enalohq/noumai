@@ -40,7 +40,7 @@ const customJestConfig = {
   ],
 
   // Coverage (disabled for now to unblock development)
-  collectCoverage: true,
+  collectCoverage: false,
   coverageDirectory: 'coverage',
     // Collect coverage from
   collectCoverageFrom: [
@@ -70,7 +70,8 @@ const customJestConfig = {
   
   // Transform ESM modules
   transformIgnorePatterns: [
-    'node_modules/(?!(next-auth|@auth|@prisma)/)',
+    'node_modules/(?!(next-auth|@auth|@prisma|msw)/)',
+    'node_modules/@mswjs/.*',
   ],
   
   

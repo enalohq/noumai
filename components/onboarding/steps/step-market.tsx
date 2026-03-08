@@ -51,9 +51,9 @@ export function StepMarket({ data, onChange }: StepMarketProps) {
           placeholder="Describe what your brand does, who it serves, and what makes it unique…"
           required
         />
-        <p className="mt-1 text-xs text-th-text-muted">
+        {/* <p className="mt-1 text-xs text-th-text-muted">
           This helps AI models understand your brand context when generating prompts
-        </p>
+        </p> */}
       </div>
     </div>
   );
