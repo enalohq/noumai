@@ -237,10 +237,11 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
       } else if (currentStep === 5) {
         await saveStep(5, { prompts: state.prompts.selectedPrompts });
         showToast("Onboarding complete! Welcome to NoumAI.", "success", 4000);
-        updateSession().catch(() => {});
+        // Refresh session to pick up onboardingCompleted flag from DB
+        await updateSession();
         setTimeout(() => {
           router.push("/");
-        }, 1000);
+        }, 500);
       }
     } catch (err: Error | unknown) {
       if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message === "NetworkError when attempting to fetch resource")) {

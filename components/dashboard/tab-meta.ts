@@ -71,6 +71,6 @@ export const tabMeta: Record<TabKey, { title: string; tooltip: string; details: 
     title: "Settings",
     tooltip: "Set your brand, site, keywords, and context.",
     details:
-      "Define the exact brand and website to track. This context is reused across analysis flows so outputs stay targeted to your business.",
+      "Define the exact brand and website to track. This context is reused across analysis flows.",
   },
 };

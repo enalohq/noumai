@@ -24,9 +24,12 @@ export function extractBrandTerms(brandName: string, brandAliases: string): stri
   return terms;
 }
 
-/** Split comma-separated competitor string into cleaned array */
-export function extractCompetitorTerms(competitors: string): string[] {
-  return competitors
+/** Build list of competitor names from config string or structured array */
+export function extractCompetitorTerms(competitors: string | any[]): string[] {
+  if (Array.isArray(competitors)) {
+    return competitors.map((c) => (typeof c === "string" ? c : c.name)).filter(Boolean);
+  }
+  return (competitors || "")
     .split(",")
     .map((c) => c.trim())
     .filter(Boolean);

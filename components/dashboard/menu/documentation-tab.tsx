@@ -103,7 +103,7 @@ const sections: DocSection[] = [
     title: "Competitor Battlecards",
     icon: "🏆",
     content: [
-      "Enter competitor names (comma-separated) and generate AI-powered battlecards.",
+      "It generate AI-powered battlecards.",
       "Each battlecard includes: sentiment, summary, strengths, weaknesses, pricing insights, AI visibility notes, and key differentiators.",
       "Battlecards are color-coded by sentiment (green = positive, yellow = neutral, red = negative).",
       "Use these to understand how AI models perceive your competitors relative to your brand.",
@@ -154,32 +154,6 @@ const sections: DocSection[] = [
       "• Your website URL cited in sources → +20 points",
       "• Positive sentiment detected → +15 points, Neutral → +5 points",
       "Scores are capped at 100. A score of 0 means the brand was not mentioned at all.",
-    ],
-  },
-  {
-    id: "models",
-    title: "Supported AI Models",
-    icon: "🤖",
-    content: [
-      "The tracker supports 6 AI model providers via Bright Data's Scraper API:",
-      "• ChatGPT — OpenAI's conversational model",
-      "• Perplexity — Search-focused AI with real-time citations",
-      "• Copilot — Microsoft's AI assistant",
-      "• Gemini — Google's multimodal AI",
-      "• Google AI — Google AI Overview / SGE results",
-      "• Grok — xAI's model",
-      "Toggle models on/off in the toolbar. Run prompts across any combination simultaneously.",
-    ],
-  },
-  {
-    id: "data-privacy",
-    title: "Data & Privacy",
-    icon: "🔒",
-    content: [
-      "All data is stored locally in your browser using sessionStorage and IndexedDB.",
-      "No data is sent to any server except when you explicitly run a scrape (via Bright Data API) or an analysis (via your configured LLM API).",
-      "You can export all data as CSV from the Analytics tab.",
-      "BYOK (Bring Your Own Key) architecture — you provide your own API keys.",
     ],
   },
 ];

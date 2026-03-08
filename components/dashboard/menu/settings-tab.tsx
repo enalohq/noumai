@@ -62,21 +62,6 @@ export function SettingsTab({ brand, onBrandChange, onReset }: SettingsTabProps)
         />
       </div>
 
-      {/* Quick status */}
-      <div className="grid gap-2 sm:grid-cols-3">
-        <StatusChip
-          label="Brand Name"
-          ok={brand.brandName.trim().length > 0}
-        />
-        <StatusChip
-          label="Website"
-          ok={brand.website.trim().length > 0}
-        />
-        <StatusChip
-          label="Keywords"
-          ok={brand.keywords.trim().length > 0}
-        />
-      </div>
 
     </div>
   );
@@ -108,16 +93,4 @@ function Field({
   );
 }
 
-function StatusChip({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-th-border bg-th-card-alt px-3 py-2.5">
-      <span
-        className={`inline-block h-2.5 w-2.5 rounded-full ${ok ? "bg-th-success" : "bg-th-text-muted"}`}
-      />
-      <span className="text-sm text-th-text-secondary">{label}</span>
-      <span className={`ml-auto text-xs font-medium ${ok ? "text-th-success" : "text-th-text-muted"}`}>
-        {ok ? "Set" : "Missing"}
-      </span>
-    </div>
-  );
-}
+

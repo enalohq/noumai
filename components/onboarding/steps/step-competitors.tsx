@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { sanitizeCompetitor } from "@/lib/competitors/utils";
 
 export interface CompetitorData {
   name: string;
@@ -66,7 +67,8 @@ export function StepCompetitors({
         }
 
         const { competitors: discovered } = await res.json();
-        setDiscoveredCompetitors(discovered);
+        const sanitized = (discovered || []).map(sanitizeCompetitor);
+        setDiscoveredCompetitors(sanitized);
       } catch (error) {
         console.error("[StepCompetitors] Discovery error:", error);
         setDiscoverError(

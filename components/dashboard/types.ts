@@ -41,6 +41,13 @@ type BattlecardSection = {
   points: string[];
 };
 
+export interface CompetitorData {
+  name: string;
+  url?: string;
+  type: "direct" | "indirect" | "substitute";
+  isAutoDiscovered?: boolean;
+}
+
 export type Battlecard = {
   competitor: string;
   sentiment: "positive" | "neutral" | "negative";
@@ -148,7 +155,7 @@ export type AppState = {
   nicheQueries: string[];
   cronExpr: string;
   githubWorkflow: string;
-  competitors: string;
+  competitors: CompetitorData[];
   battlecards: Battlecard[];
   runs: ScrapeRun[];
   auditReport: AuditReport | null;
@@ -162,13 +169,13 @@ export type AppState = {
 
 export const tabs = [
   "Prompts",
+  "Competitor Battlecards",
   "Persona Fan-Out",
   "Prompt Explorer",
   "Responses",
   "Visibility Analytics",
   "Citations",
   "Citation Opportunities",
-  "Competitor Battlecards",
   "AEO Audit",
   "Automation",
   "Documentation",

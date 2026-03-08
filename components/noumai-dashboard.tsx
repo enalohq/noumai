@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadNoumAIValue, saveNoumAIValue, clearNoumAIStore } from "@/lib/client/noumai-store";
+import { sanitizeCompetitor } from "@/lib/competitors/utils";
 import { useServerRuns } from "@/lib/client/use-server-runs";
 import { useTrackedPrompts } from "@/lib/client/use-tracked-prompts";
 import { useDashboardKpis } from "@/lib/client/use-dashboard-kpis";
@@ -72,7 +73,7 @@ const defaultState: AppState = {
   cronExpr: "0 */6 * * *",
   githubWorkflow:
     "name: noumai\non:\n  schedule:\n    - cron: '0 */6 * * *'\njobs:\n  track:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run test:scraper",
-  competitors: "profound.com, otterly.ai, peec.ai",
+  competitors: [],
   battlecards: [],
   runs: [],
   auditReport: null,
@@ -238,6 +239,15 @@ export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {
               ALL_PROVIDERS.includes(provider as Provider),
             )
           : [],
+        competitors: Array.isArray(data.competitors)
+          ? data.competitors.map(sanitizeCompetitor)
+          : typeof data.competitors === "string"
+            ? (data.competitors as string)
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map(sanitizeCompetitor)
+            : [],
       };
       if (merged.activeProviders.length === 0) {
         merged.activeProviders = [merged.provider];
@@ -260,13 +270,11 @@ export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {
                 description: ws.brandDescription || "",
                 keywords: ws.targetKeywords || "",
               };
-              const competitorsString = Array.isArray(ws.competitors)
-                ? ws.competitors
-                    .filter((c: { url?: string }) => c.url?.trim())
-                    .map((c: { url: string }) => c.url.trim())
-                    .join(", ")
-                : "";
-              if (competitorsString) merged.competitors = competitorsString;
+              if (Array.isArray(ws.competitors)) {
+                merged.competitors = ws.competitors
+                  .filter((c: any) => c.name?.trim())
+                  .map(sanitizeCompetitor);
+              }
 
               // Merge savedStarterPrompts into customPrompts (deduplicated) — backward compat fallback
               // TrackedPrompts from server are the primary source (loaded separately)
@@ -823,12 +831,31 @@ Requirements:
     setMessage("Building competitor battlecards...");
 
     try {
-      const competitorList = state.competitors
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean);
+      // Fetch competitors from database to get brand names
+      let competitorNames: string[] = [];
+      
+      try {
+        const res = await fetch("/api/onboarding");
+        if (res.ok) {
+          const onboarding = await res.json();
+          const competitors = onboarding.workspace?.competitors || [];
+          if (Array.isArray(competitors) && competitors.length > 0) {
+            // Use competitor names from database
+            competitorNames = competitors
+              .filter((c: { name?: string }) => c.name?.trim())
+              .map((c: { name: string }) => c.name.trim());
+          }
+        }
+      } catch {
+        // Fallback to parsing the competitors string
+      }
 
-      if (competitorList.length === 0) {
+      // If no competitors from DB, use state.competitors
+      if (competitorNames.length === 0) {
+        competitorNames = state.competitors.map((c) => c.name);
+      }
+
+      if (competitorNames.length === 0) {
         setMessage("Add at least one competitor first.");
         setBusy(false);
         return;
@@ -836,14 +863,15 @@ Requirements:
 
       const exampleJson = JSON.stringify([
         {
-          competitor: "example.com",
+          competitor: "Profound",
           sentiment: "positive",
           summary: "Strong brand presence with frequent citations.",
           sections: [
             { heading: "Strengths", points: ["High domain authority", "Frequent AI citations"] },
             { heading: "Weaknesses", points: ["Limited product range"] },
-            { heading: "Pricing", points: ["Premium tier: $99/mo", "Free plan available"] },
+            { heading: "Pricing Insights", points: ["Premium tier: $99/mo", "Free plan available"] },
             { heading: "AI Visibility", points: ["Mentioned in 8/10 tested prompts"] },
+            { heading: "Key Differentiators", points: ["Unique content optimization features"] },
           ],
         },
       ]);
@@ -852,24 +880,26 @@ Requirements:
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `${brandCtx}You are an AI search visibility analyst. Analyze how AI models (ChatGPT, Perplexity, Gemini, Copilot, Google AI, Grok) likely perceive each of these competitors: ${competitorList.join(", ")}.
+          prompt: `${brandCtx}You are an AI search visibility analyst. Analyze how AI models (ChatGPT, Perplexity, Gemini, Copilot, Google AI, Grok) likely perceive each of these competitors: ${competitorNames.join(", ")}.
 
 For EACH competitor, provide a JSON object with:
-- "competitor": the name exactly as given
+- "competitor": the brand name exactly as given
 - "sentiment": one of "positive", "neutral", or "negative" based on likely AI recommendation tone
 - "summary": 2-3 sentences overview
-- "sections": an array of objects with "heading" (string) and "points" (string[]) covering:
-  * "Strengths" — what the competitor does well in AI visibility
-  * "Weaknesses" — gaps or disadvantages
-  * "Pricing Insights" — known pricing tiers or cost perception
-  * "AI Visibility" — how often/prominently they appear in AI responses
-  * "Key Differentiators" — what sets them apart
+- "sections": an array with EXACTLY 5 objects, each with "heading" (string) and "points" (array of strings):
+  1. { "heading": "Strengths", "points": [...] } — what the competitor does well in AI visibility
+  2. { "heading": "Weaknesses", "points": [...] } — gaps or disadvantages
+  3. { "heading": "Pricing Insights", "points": [...] } — known pricing tiers or cost perception
+  4. { "heading": "AI Visibility", "points": [...] } — how often/prominently they appear in AI responses
+  5. { "heading": "Key Differentiators", "points": [...] } — what sets them apart
+
+IMPORTANT: You MUST include all 5 sections for each competitor. Each section should have 2-5 points.
 
 Return ONLY a valid JSON array. No markdown fences. No extra text. Example format:
 ${exampleJson}
 
-Now analyze all ${competitorList.length} competitors:`,
-          maxTokens: Math.max(2000, Math.min(4096, 500 * competitorList.length)),
+Now analyze all ${competitorNames.length} competitors:`,
+          maxTokens: Math.max(2000, Math.min(4096, 500 * competitorNames.length)),
           temperature: 0.3,
           skipCache: true,
         }),
@@ -944,7 +974,7 @@ Now analyze all ${competitorList.length} competitors:`,
 
       // Fallback: use raw text split by competitor names
       if (!parsed || parsed.length === 0) {
-        parsed = competitorList.map((name) => {
+        parsed = competitorNames.map((name) => {
           // Try to find a section about this competitor in the raw text
           const namePattern = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
           const idx = text.search(namePattern);
@@ -1089,6 +1119,11 @@ Now analyze all ${competitorList.length} competitors:`,
           battlecards={state.battlecards}
           onCompetitorsChange={(value) => setState((prev) => ({ ...prev, competitors: value }))}
           onBuildBattlecards={runBattlecards}
+          brandContext={{
+            brandName: state.brand.brandName,
+            website: state.brand.website,
+            industry: state.brand.industry,
+          }}
         />
       );
     }
