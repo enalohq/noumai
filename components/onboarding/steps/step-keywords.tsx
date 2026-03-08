@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { normalizeKeywords } from "@/lib/onboarding/keyword-normalizer";
 
 export interface KeywordsData {
@@ -11,9 +11,11 @@ interface StepKeywordsProps {
   data: KeywordsData;
   onChange: (data: KeywordsData) => void;
   suggestedKeywords?: string[];
+  isLoadingSuggestions?: boolean;
 }
 
-export function StepKeywords({ data, onChange, suggestedKeywords = [] }: StepKeywordsProps) {
+export function StepKeywords({ data, onChange, suggestedKeywords = [], isLoadingSuggestions = false }: StepKeywordsProps) {
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   // Calculate keyword statistics
   const stats = useMemo(() => {
     const normalized = normalizeKeywords(data.targetKeywords);
@@ -80,11 +82,16 @@ export function StepKeywords({ data, onChange, suggestedKeywords = [] }: StepKey
       {/* Suggested keywords from competitors */}
       {availableSuggestions.length > 0 && (
         <div>
-          <p className="mb-2 text-sm font-medium text-th-text">
-            Suggested keywords from your competitors:
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-th-text">
+              Suggested keywords from your competitors:
+            </p>
+            {isLoadingSuggestions && (
+              <span className="text-xs text-th-text-muted">Loading AI suggestions...</span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
-            {availableSuggestions.slice(0, 10).map((keyword) => (
+            {(showAllSuggestions ? availableSuggestions : availableSuggestions.slice(0, 10)).map((keyword) => (
               <button
                 key={keyword}
                 type="button"
@@ -94,10 +101,23 @@ export function StepKeywords({ data, onChange, suggestedKeywords = [] }: StepKey
                 + {keyword}
               </button>
             ))}
-            {availableSuggestions.length > 10 && (
-              <span className="text-xs text-th-text-muted">
+            {availableSuggestions.length > 10 && !showAllSuggestions && (
+              <button
+                type="button"
+                onClick={() => setShowAllSuggestions(true)}
+                className="rounded-full border border-th-accent/30 bg-th-accent/5 px-3 py-1 text-xs text-th-accent hover:bg-th-accent/10 transition-colors font-medium"
+              >
                 +{availableSuggestions.length - 10} more
-              </span>
+              </button>
+            )}
+            {showAllSuggestions && availableSuggestions.length > 10 && (
+              <button
+                type="button"
+                onClick={() => setShowAllSuggestions(false)}
+                className="rounded-full border border-th-accent/30 bg-th-accent/5 px-3 py-1 text-xs text-th-accent hover:bg-th-accent/10 transition-colors font-medium"
+              >
+                Show less
+              </button>
             )}
           </div>
         </div>

@@ -401,4 +401,130 @@ describe('StepKeywords', () => {
       expect(textarea).toHaveFocus();
     });
   });
+
+  describe('Expandable Suggestions', () => {
+    it('should show only first 10 suggestions initially', () => {
+      const manyKeywords = Array.from({ length: 25 }, (_, i) => `keyword${i + 1}`);
+      render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={manyKeywords}
+        />
+      );
+      expect(screen.getByText('+ keyword1')).toBeInTheDocument();
+      expect(screen.getByText('+ keyword10')).toBeInTheDocument();
+      expect(screen.queryByText('+ keyword11')).not.toBeInTheDocument();
+    });
+
+    it('should show "+N more" button when suggestions exceed 10', () => {
+      const manyKeywords = Array.from({ length: 25 }, (_, i) => `keyword${i + 1}`);
+      render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={manyKeywords}
+        />
+      );
+      expect(screen.getByText('+15 more')).toBeInTheDocument();
+    });
+
+    it('should expand all suggestions when "+N more" is clicked', () => {
+      const manyKeywords = Array.from({ length: 25 }, (_, i) => `keyword${i + 1}`);
+      render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={manyKeywords}
+        />
+      );
+      const expandButton = screen.getByText('+15 more');
+      fireEvent.click(expandButton);
+      
+      expect(screen.getByText('+ keyword11')).toBeInTheDocument();
+      expect(screen.getByText('+ keyword25')).toBeInTheDocument();
+      expect(screen.getByText('Show less')).toBeInTheDocument();
+    });
+
+    it('should collapse suggestions when "Show less" is clicked', () => {
+      const manyKeywords = Array.from({ length: 25 }, (_, i) => `keyword${i + 1}`);
+      const { rerender } = render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={manyKeywords}
+        />
+      );
+      
+      const expandButton = screen.getByText('+15 more');
+      fireEvent.click(expandButton);
+      expect(screen.getByText('+ keyword11')).toBeInTheDocument();
+      
+      const collapseButton = screen.getByText('Show less');
+      fireEvent.click(collapseButton);
+      
+      expect(screen.queryByText('+ keyword11')).not.toBeInTheDocument();
+      expect(screen.getByText('+15 more')).toBeInTheDocument();
+    });
+
+    it('should not show expand button when suggestions <= 10', () => {
+      const fewKeywords = ['keyword1', 'keyword2', 'keyword3'];
+      render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={fewKeywords}
+        />
+      );
+      expect(screen.queryByText(/\+\d+ more/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Show less')).not.toBeInTheDocument();
+    });
+
+    it('should add suggestion when clicked in expanded view', () => {
+      const manyKeywords = Array.from({ length: 15 }, (_, i) => `keyword${i + 1}`);
+      render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={manyKeywords}
+        />
+      );
+      
+      const expandButton = screen.getByText('+5 more');
+      fireEvent.click(expandButton);
+      
+      const keyword12Button = screen.getByText('+ keyword12');
+      fireEvent.click(keyword12Button);
+      
+      expect(mockOnChange).toHaveBeenCalledWith({ targetKeywords: 'keyword12' });
+    });
+
+    it('should filter out already entered keywords from suggestions', () => {
+      const suggestions = ['crm', 'sales', 'pipeline', 'leads'];
+      render(
+        <StepKeywords
+          data={{ targetKeywords: 'crm, sales' }}
+          onChange={mockOnChange}
+          suggestedKeywords={suggestions}
+        />
+      );
+      
+      expect(screen.queryByText('+ crm')).not.toBeInTheDocument();
+      expect(screen.queryByText('+ sales')).not.toBeInTheDocument();
+      expect(screen.getByText('+ pipeline')).toBeInTheDocument();
+      expect(screen.getByText('+ leads')).toBeInTheDocument();
+    });
+
+    it('should show loading indicator when isLoadingSuggestions is true', () => {
+      render(
+        <StepKeywords
+          data={{ targetKeywords: '' }}
+          onChange={mockOnChange}
+          suggestedKeywords={['keyword1', 'keyword2']}
+          isLoadingSuggestions={true}
+        />
+      );
+      expect(screen.getByText('Loading AI suggestions...')).toBeInTheDocument();
+    });
+  });
 });

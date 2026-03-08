@@ -11,7 +11,7 @@ import { StepKeywords, type KeywordsData } from "./steps/step-keywords";
 import { StepPrompts, type PromptsData } from "./steps/step-prompts";
 import { useToast } from "@/components/ui/toast";
 import { useAutoFillMarket } from "./hooks/useAutoFillMarket";
-import { extractCompetitorKeywords } from "@/lib/onboarding/extract-competitor-keywords";
+import { useKeywordSuggestions } from "./hooks/useKeywordSuggestions";
 
 type ToastService = ReturnType<typeof useToast>;
 
@@ -58,6 +58,20 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const { suggestions: suggestedKeywords, loading: loadingSuggestions, fetchSuggestions } = useKeywordSuggestions({
+    brandName: state.brand.brandName,
+    industry: state.market.industry,
+    description: state.market.brandDescription,
+    competitorNames: state.competitors.competitors.map((c) => c.name),
+  });
+
+  // Fetch keywords when entering step 4
+  useEffect(() => {
+    if (currentStep === 4) {
+      fetchSuggestions();
+    }
+  }, [currentStep, fetchSuggestions]);
 
   // Load saved progress on mount
   useEffect(() => {
@@ -213,11 +227,11 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
         setCurrentStep(4);
       } else if (currentStep === 4) {
         if (!state.keywords.targetKeywords.trim()) {
-          setError("Please enter at least one target keyword.");
+          setError("Please enter at least one target keyword to track.");
           return;
         }
-        // Save keywords to dedicated step 4
-        await saveStep(4, { targetKeywords: state.keywords.targetKeywords });
+        
+        await saveStep(4, { targetKeywords: state.keywords.targetKeywords.trim() });
         showToast("Step 4 completed! Moving to prompt selection.", "success");
         setCurrentStep(5);
       } else if (currentStep === 5) {
@@ -382,9 +396,8 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
               <StepKeywords
                 data={state.keywords || { targetKeywords: "" }}
                 onChange={(keywords) => setState((s) => ({ ...s, keywords }))}
-                suggestedKeywords={extractCompetitorKeywords(
-                  state.competitors.competitors.map((c) => c.name)
-                )}
+                suggestedKeywords={suggestedKeywords}
+                isLoadingSuggestions={loadingSuggestions}
               />
             )}
             {currentStep === 5 && (

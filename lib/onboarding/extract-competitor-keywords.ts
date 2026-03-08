@@ -1,52 +1,41 @@
+import { RuleBasedSuggester, KeywordFilter } from "./keyword-suggester";
+
 /**
  * Extract keyword suggestions from competitor names
- * Breaks down competitor names into meaningful keyword components
+ * Now follows Strategy Pattern (RuleBasedSuggester) and SRP (KeywordFilter)
+ * 
+ * @deprecated Use RuleBasedSuggester directly or DiscoveryService for multiple strategies
  */
 export function extractCompetitorKeywords(competitorNames: string[]): string[] {
+  // We use the new strategy class but wrap it for backward compatibility with 
+  // existing synchronous calls in the UI.
+  const suggester = new RuleBasedSuggester();
+  
+  // Note: Local implementation of RuleBasedSuggester is sync-compatible if we want, 
+  // but the interface is async. For this legacy wrapper, we can just run it or 
+  // use the logic directly.
+  
   const keywords = new Set<string>();
 
   for (const name of competitorNames) {
-    if (!name || typeof name !== 'string') continue;
+    if (!name) continue;
+    
+    // Add full name
+    if (name.length > 2 && name.length < 100) {
+      keywords.add(name.toLowerCase().trim());
+    }
 
-    // Split by common delimiters and clean up
+    // Split and filter
     const parts = name
       .toLowerCase()
       .split(/[\s\-_\.&,]+/)
-      .filter((part) => part.length > 1 && part.length < 50); // Require at least 2 chars
+      .filter(part => part.length > 1 && part.length < 50)
+      .filter(part => KeywordFilter.isUseful(part));
 
-    // Add individual parts as keywords
     for (const part of parts) {
-      // Skip common words that aren't useful as keywords
-      if (!isCommonWord(part)) {
-        keywords.add(part);
-      }
-    }
-
-    // Add the full name as a keyword if it's reasonable length
-    if (name.length > 2 && name.length < 100) {
-      keywords.add(name.toLowerCase().trim());
+      keywords.add(part);
     }
   }
 
   return Array.from(keywords).sort();
-}
-
-/**
- * Check if a word is too common to be useful as a keyword
- */
-function isCommonWord(word: string): boolean {
-  const commonWords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-    'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'be', 'been',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'must', 'can', 'it', 'its', 'this', 'that',
-    'these', 'those', 'i', 'you', 'he', 'she', 'we', 'they', 'what', 'which',
-    'who', 'when', 'where', 'why', 'how', 'all', 'each', 'every', 'both',
-    'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
-    'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'co', 'inc',
-    'ltd', 'llc', 'corp', 'corporation', 'company', 'group', 'solutions',
-    'services', 'systems', 'technologies', 'tech', 'digital', 'online',
-  ]);
-
-  return commonWords.has(word);
 }

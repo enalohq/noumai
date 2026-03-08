@@ -338,7 +338,11 @@ describe('OnboardingWizard', () => {
       const continueButton = screen.getByRole('button', { name: /Continue/i });
       await user.click(continueButton);
 
-      expect(await screen.findByText(/Please enter at least one target keyword/i)).toBeInTheDocument();
+      // Should block progression and show error
+      expect(await screen.findByText('Please enter at least one target keyword to track.')).toBeInTheDocument();
+      // Ensure fetch was not called with a PATCH request
+      const patchCalls = mockFetch.mock.calls.filter(call => call[1] && call[1].method === 'PATCH');
+      expect(patchCalls.length).toBe(0);
     });
 
     it('should not allow whitespace-only keywords', async () => {
@@ -358,7 +362,11 @@ describe('OnboardingWizard', () => {
       const continueButton = screen.getByRole('button', { name: /Continue/i });
       await user.click(continueButton);
 
-      expect(await screen.findByText(/Please enter at least one target keyword/i)).toBeInTheDocument();
+      // Should block progression and show error
+      expect(await screen.findByText('Please enter at least one target keyword to track.')).toBeInTheDocument();
+      // Ensure fetch was not called with a PATCH request
+      const patchCalls = mockFetch.mock.calls.filter(call => call[1] && call[1].method === 'PATCH');
+      expect(patchCalls.length).toBe(0);
     });
   });
 
