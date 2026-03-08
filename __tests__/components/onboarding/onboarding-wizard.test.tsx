@@ -19,17 +19,29 @@ jest.mock('@/components/ui/toast', () => ({
   useToast: jest.fn(),
 }));
 
-// Mock step components
 interface MockStepProps {
-  data: Record<string, unknown>;
-  onChange: (data: Record<string, unknown>) => void;
+  data: {
+    brandName?: string;
+    website?: string;
+    industry?: string;
+    targetKeywords?: string;
+  };
+  onChange: (data: any) => void;
 }
 
 jest.mock('@/components/onboarding/steps/step-brand', () => ({
   StepBrand: ({ data, onChange }: MockStepProps) => (
     <div data-testid="step-brand">
-      <input aria-label="Brand Name" value={(data.brandName as string) || ''} onChange={(e) => onChange({ ...data, brandName: e.target.value })} />
-      <input aria-label="Website" value={(data.website as string) || ''} onChange={(e) => onChange({ ...data, website: e.target.value })} />
+      <input 
+        aria-label="Brand Name" 
+        value={data.brandName || ''} 
+        onChange={(e) => onChange({ ...data, brandName: e.target.value })} 
+      />
+      <input 
+        aria-label="Website" 
+        value={data.website || ''} 
+        onChange={(e) => onChange({ ...data, website: e.target.value })} 
+      />
     </div>
   ),
 }));
@@ -37,7 +49,11 @@ jest.mock('@/components/onboarding/steps/step-brand', () => ({
 jest.mock('@/components/onboarding/steps/step-market', () => ({
   StepMarket: ({ data, onChange }: MockStepProps) => (
     <div data-testid="step-market">
-      <input placeholder="Industry" value={(data.industry as string) || ''} onChange={(e) => onChange({ ...data, industry: e.target.value })} />
+      <input 
+        placeholder="Industry" 
+        value={data.industry || ''} 
+        onChange={(e) => onChange({ ...data, industry: e.target.value })} 
+      />
     </div>
   ),
 }));
@@ -403,9 +419,9 @@ describe('OnboardingWizard', () => {
   });
 
   describe('Error Handling', () => {
-    it('should display error message on save failure', async () => {
+    it('should display specific server error message on save failure', async () => {
       const user = userEvent.setup();
-      mockFetch.mockResolvedValue({
+      mockFetch.mockResolvedValueOnce({
         status: 200,
         json: () => Promise.resolve({ currentStep: 0 }),
       });
@@ -420,17 +436,43 @@ describe('OnboardingWizard', () => {
       await user.type(brandNameInput, 'Test Brand');
       await user.type(websiteInput, 'https://testbrand.com');
 
-      // Mock failure response
-      mockFetch.mockResolvedValue({
-        status: 500,
+      // Mock failure response with specific error
+      mockFetch.mockResolvedValueOnce({
+        status: 400,
         ok: false,
-        json: () => Promise.resolve({ error: 'Server error' }),
+        json: () => Promise.resolve({ error: 'Invalid brand name' }),
       });
 
       const continueButton = screen.getByRole('button', { name: /Continue/i });
       await user.click(continueButton);
 
-      expect(await screen.findByText(/Something went wrong/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Invalid brand name/i)).toBeInTheDocument();
+    });
+
+    it('should display network error message on fetch failure', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: () => Promise.resolve({ currentStep: 0 }),
+      });
+
+      render(<OnboardingWizard toastService={mockToastService} />);
+
+      expect(await screen.findByText('Your Brand')).toBeInTheDocument();
+
+      const brandNameInput = screen.getByRole('textbox', { name: /Brand Name/i });
+      const websiteInput = screen.getByRole('textbox', { name: /Website/i });
+
+      await user.type(brandNameInput, 'Test Brand');
+      await user.type(websiteInput, 'https://testbrand.com');
+
+      // Mock network failure
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      const continueButton = screen.getByRole('button', { name: /Continue/i });
+      await user.click(continueButton);
+
+      expect(await screen.findByText(/Network error. Please check your internet connection./i)).toBeInTheDocument();
     });
 
     it('should handle 401 unauthorized response', async () => {
@@ -559,15 +601,11 @@ describe('OnboardingWizard', () => {
       await user.click(continueButton);
 
       // Verify we moved to step 2
-      await waitFor(() => {
-        expect(screen.getByText('Your Market')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Your Market')).toBeInTheDocument();
 
       // Verify auto-fill data is populated in the form
-      await waitFor(() => {
-        const industryInput = screen.getByPlaceholderText('Industry');
-        expect(industryInput).toHaveValue('SaaS / Software');
-      });
+      const industryInput = await screen.findByPlaceholderText('Industry');
+      expect(industryInput).toHaveValue('SaaS / Software');
 
       // Verify auto-fill was called
       expect(mockFetch).toHaveBeenCalledWith(
@@ -613,9 +651,7 @@ describe('OnboardingWizard', () => {
       await user.click(continueButton);
 
       // Should still move to step 2
-      await waitFor(() => {
-        expect(screen.getByText('Your Market')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Your Market')).toBeInTheDocument();
     });
 
     it('should continue to step 2 if auto-fill GET fails', async () => {
@@ -660,9 +696,7 @@ describe('OnboardingWizard', () => {
       await user.click(continueButton);
 
       // Should still move to step 2
-      await waitFor(() => {
-        expect(screen.getByText('Your Market')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('Your Market')).toBeInTheDocument();
     });
   });
 

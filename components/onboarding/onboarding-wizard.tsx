@@ -125,7 +125,17 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
         signOut({ callbackUrl: "/auth/signin" });
         return;
       }
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) {
+        let errorMessage = "Failed to save";
+        try {
+          const errorData = await res.json();
+          if (errorData.error) errorMessage = errorData.error;
+        } catch {
+          // Fallback to status text or default
+          errorMessage = `Error: ${res.status} ${res.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
       
       if (showNotification) {
         showToast("Progress saved", "success");
@@ -217,8 +227,12 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
           router.push("/");
         }, 1000);
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err: any) {
+      if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message === "NetworkError when attempting to fetch resource")) {
+        setError("Network error. Please check your internet connection.");
+      } else {
+        setError(err?.message || "Something went wrong. Please try again.");
+      }
       showToast("Failed to save step", "error");
     }
   };
@@ -240,8 +254,12 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
       setTimeout(() => {
         router.push("/");
       }, 1000);
-    } catch {
-      setError("Something went wrong.");
+    } catch (err: any) {
+      if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message === "NetworkError when attempting to fetch resource")) {
+        setError("Network error. Please check your internet connection.");
+      } else {
+        setError(err?.message || "Something went wrong.");
+      }
       showToast("Failed to skip onboarding", "error");
     } finally {
       setSaving(false);
