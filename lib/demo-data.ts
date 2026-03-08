@@ -357,7 +357,11 @@ export const DEMO_STATE: AppState = {
   cronExpr: "0 */6 * * *",
   githubWorkflow:
     "name: geo-aeo-tracker\non:\n  schedule:\n    - cron: '0 */6 * * *'\njobs:\n  track:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run test:scraper",
-  competitors: "profound.com, peec.ai, otterly.ai",
+  competitors: [
+    { name: "Profound", url: "https://profound.com", type: "direct" },
+    { name: "Peec AI", url: "https://peec.ai", type: "direct" },
+    { name: "Otterly.ai", url: "https://otterly.ai", type: "direct" },
+  ],
   battlecards: demoBattlecards,
   runs: generateRuns(),
   auditReport: demoAuditReport,
