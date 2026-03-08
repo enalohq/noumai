@@ -1,5 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
+import { normalizeKeywords } from "@/lib/onboarding/keyword-normalizer";
+
 export interface KeywordsData {
   targetKeywords: string;
 }
@@ -7,9 +10,40 @@ export interface KeywordsData {
 interface StepKeywordsProps {
   data: KeywordsData;
   onChange: (data: KeywordsData) => void;
+  suggestedKeywords?: string[];
 }
 
-export function StepKeywords({ data, onChange }: StepKeywordsProps) {
+export function StepKeywords({ data, onChange, suggestedKeywords = [] }: StepKeywordsProps) {
+  // Calculate keyword statistics
+  const stats = useMemo(() => {
+    const normalized = normalizeKeywords(data.targetKeywords);
+    const raw = data.targetKeywords
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+
+    return {
+      normalizedCount: normalized.length,
+      rawCount: raw.length,
+      duplicateCount: raw.length - normalized.length,
+      hasDuplicates: raw.length > normalized.length,
+    };
+  }, [data.targetKeywords]);
+
+  // Filter suggestions to only show ones not already entered
+  const availableSuggestions = useMemo(() => {
+    const entered = normalizeKeywords(data.targetKeywords);
+    return suggestedKeywords.filter(
+      (keyword) => !entered.includes(keyword.toLowerCase())
+    );
+  }, [data.targetKeywords, suggestedKeywords]);
+
+  const handleAddSuggestion = (keyword: string) => {
+    const current = data.targetKeywords.trim();
+    const newKeywords = current ? `${current}, ${keyword}` : keyword;
+    onChange({ targetKeywords: newKeywords });
+  };
+
   return (
     <div className="space-y-5">
       <div>
@@ -22,14 +56,52 @@ export function StepKeywords({ data, onChange }: StepKeywordsProps) {
           onChange={(e) => onChange({ targetKeywords: e.target.value })}
           className="bd-input w-full rounded-lg p-2.5 text-sm"
           rows={4}
-          placeholder="Enter keywords to track (comma-separated)&#10;e.g., project management software, invoicing software, team collaboration tool, skincare.."
+          placeholder="Enter keywords to track (comma or newline separated)&#10;e.g., project management, invoicing, team collaboration"
           required
         />
         <p className="mt-1 text-xs text-th-text-muted">
           These keywords will be used to track your AI visibility across search engines.
           Enter keywords relevant to your business and products.
         </p>
+
+        {/* Keyword count and duplicate feedback */}
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-th-text-muted">
+            {stats.normalizedCount} keyword{stats.normalizedCount !== 1 ? "s" : ""} entered
+          </p>
+          {stats.hasDuplicates && (
+            <p className="text-xs text-th-warning">
+              {stats.duplicateCount} duplicate{stats.duplicateCount !== 1 ? "s" : ""} detected
+            </p>
+          )}
+        </div>
       </div>
+
+      {/* Suggested keywords from competitors */}
+      {availableSuggestions.length > 0 && (
+        <div>
+          <p className="mb-2 text-sm font-medium text-th-text">
+            Suggested keywords from your competitors:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {availableSuggestions.slice(0, 10).map((keyword) => (
+              <button
+                key={keyword}
+                type="button"
+                onClick={() => handleAddSuggestion(keyword)}
+                className="rounded-full border border-th-accent/30 bg-th-accent/5 px-3 py-1 text-xs text-th-accent hover:bg-th-accent/10 transition-colors"
+              >
+                + {keyword}
+              </button>
+            ))}
+            {availableSuggestions.length > 10 && (
+              <span className="text-xs text-th-text-muted">
+                +{availableSuggestions.length - 10} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

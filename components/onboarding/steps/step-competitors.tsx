@@ -32,6 +32,7 @@ export function StepCompetitors({
     Array<{ name: string; url?: string; type: string; confidence: number }>
   >([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const [newCompetitor, setNewCompetitor] = useState({
     name: "",
     url: "",
@@ -99,24 +100,48 @@ export function StepCompetitors({
     [competitors, onChange]
   );
 
-  const addManualCompetitor = useCallback(() => {
+  const addManualCompetitor = useCallback(async () => {
     if (!newCompetitor.name.trim()) return;
 
     if (!competitors.some((c) => c.name === newCompetitor.name.trim())) {
-      onChange([
-        ...competitors,
-        {
-          name: newCompetitor.name.trim(),
-          url: newCompetitor.url.trim() || undefined,
-          type: newCompetitor.type,
-          isAutoDiscovered: false,
-        },
-      ]);
+      setIsAdding(true);
+      try {
+        onChange([
+          ...competitors,
+          {
+            name: newCompetitor.name.trim(),
+            url: newCompetitor.url.trim() || undefined,
+            type: newCompetitor.type,
+            isAutoDiscovered: false,
+          },
+        ]);
+      } finally {
+        setIsAdding(false);
+      }
     }
 
     setNewCompetitor({ name: "", url: "", type: "direct" });
     setShowAddForm(false);
   }, [newCompetitor, competitors, onChange]);
+
+  // Keyboard support for form
+  useEffect(() => {
+    if (!showAddForm) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !isAdding && newCompetitor.name.trim()) {
+        e.preventDefault();
+        addManualCompetitor();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setShowAddForm(false);
+        setNewCompetitor({ name: "", url: "", type: "direct" });
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showAddForm, isAdding, newCompetitor, addManualCompetitor]);
 
   const removeCompetitor = useCallback(
     (name: string) => {
@@ -266,24 +291,32 @@ export function StepCompetitors({
                 <option value="substitute">Substitute</option>
               </select>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={addManualCompetitor}
-                disabled={!newCompetitor.name.trim()}
-                className="bd-button-primary text-sm"
-              >
-                Add
-              </button>
+            <div className="flex gap-3 justify-end">
               <button
                 type="button"
                 onClick={() => {
                   setShowAddForm(false);
                   setNewCompetitor({ name: "", url: "", type: "direct" });
                 }}
-                className="bd-button-secondary text-sm"
+                disabled={isAdding}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-th-text-muted hover:text-th-text hover:bg-th-border/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Cancel
+              </button>
+              <button
+                type="button"
+                onClick={addManualCompetitor}
+                disabled={!newCompetitor.name.trim() || isAdding}
+                className="rounded-lg bg-th-accent px-4 py-2 text-sm font-medium text-white hover:bg-th-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {isAdding ? (
+                  <>
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add"
+                )}
               </button>
             </div>
           </div>

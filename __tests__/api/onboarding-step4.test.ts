@@ -60,7 +60,7 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       name: 'Test User',
       email: 'test@example.com',
     });
-    (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-123', onboardingStep: 1 });
+    (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-123', onboardingStep: 4 });
     (prisma.competitor.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
     (prisma.competitor.create as jest.Mock).mockResolvedValue({ id: 'competitor-123' });
     (prisma.trackedPrompt.findMany as jest.Mock).mockResolvedValue([]);
@@ -88,47 +88,18 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
 
       (prisma.user.update as jest.Mock).mockResolvedValue({
         id: 'user-123',
-        onboardingStep: 3,
+        onboardingStep: 4,
       });
-
-      (prisma.$transaction as jest.Mock).mockResolvedValue([]);
 
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: '',
-          competitors: [],
         },
       });
 
       const response = await PATCH(request);
-      // Route handler doesn't validate empty keywords, it just saves them
-      expect(response.status).toBe(200);
-    });
-
-    it('should accept whitespace-only keywords', async () => {
-      (prisma.workspace.findFirst as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        userId: 'user-123',
-      });
-
-      (prisma.workspace.update as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        targetKeywords: '   \n  \t  ',
-      });
-
-      const request = createNextRequest({
-        method: 'PATCH',
-        body: {
-          step: 3,
-          targetKeywords: '   \n  \t  ',
-          competitors: [],
-        },
-      });
-
-      const response = await PATCH(request);
-      // Route handler doesn't validate whitespace, it just saves them
       expect(response.status).toBe(200);
     });
 
@@ -146,14 +117,54 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare, beauty, organic',
-          competitors: [],
         },
       });
 
       const response = await PATCH(request);
       expect(response.status).toBe(200);
+
+      expect(prisma.workspace.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'workspace-123' },
+          data: expect.objectContaining({
+            targetKeywords: 'skincare, beauty, organic',
+          }),
+        })
+      );
+    });
+
+    it('should normalize keywords (trim, lowercase, deduplicate)', async () => {
+      (prisma.workspace.findFirst as jest.Mock).mockResolvedValue({
+        id: 'workspace-123',
+        userId: 'user-123',
+      });
+
+      (prisma.workspace.update as jest.Mock).mockResolvedValue({
+        id: 'workspace-123',
+        targetKeywords: 'skincare, beauty',
+      });
+
+      const request = createNextRequest({
+        method: 'PATCH',
+        body: {
+          step: 4,
+          targetKeywords: '  Skincare  ,  BEAUTY  ,  skincare  ',
+        },
+      });
+
+      const response = await PATCH(request);
+      expect(response.status).toBe(200);
+
+      // Keywords should be normalized
+      expect(prisma.workspace.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            targetKeywords: 'skincare, beauty',
+          }),
+        })
+      );
     });
 
     it('should accept multiline keywords', async () => {
@@ -164,15 +175,14 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
 
       (prisma.workspace.update as jest.Mock).mockResolvedValue({
         id: 'workspace-123',
-        targetKeywords: 'keyword1\nkeyword2\nkeyword3',
+        targetKeywords: 'keyword1, keyword2, keyword3',
       });
 
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'keyword1\nkeyword2\nkeyword3',
-          competitors: [],
         },
       });
 
@@ -194,9 +204,8 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare',
-          competitors: [],
         },
       });
 
@@ -212,15 +221,14 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
 
       (prisma.workspace.update as jest.Mock).mockResolvedValue({
         id: 'workspace-123',
-        targetKeywords: 'AI/ML, C++, Node.js, @mention, #hashtag',
+        targetKeywords: 'ai/ml, c++, node.js, @mention, #hashtag',
       });
 
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'AI/ML, C++, Node.js, @mention, #hashtag',
-          competitors: [],
         },
       });
 
@@ -242,9 +250,8 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: '美容, 护肤, 有机, café, naïve',
-          competitors: [],
         },
       });
 
@@ -268,9 +275,8 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare, beauty',
-          competitors: [],
         },
       });
 
@@ -302,9 +308,8 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'new keywords',
-          competitors: [],
         },
       });
 
@@ -320,103 +325,36 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       );
     });
 
-    it('should preserve other workspace data when saving keywords', async () => {
-      (prisma.workspace.findFirst as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        userId: 'user-123',
-        brandName: 'Test Brand',
-        industry: 'Technology',
-      });
-
-      (prisma.workspace.update as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        brandName: 'Test Brand',
-        industry: 'Technology',
-        targetKeywords: 'new keywords',
-      });
-
-      const request = createNextRequest({
-        method: 'PATCH',
-        body: {
-          step: 3,
-          targetKeywords: 'new keywords',
-          competitors: [],
-        },
-      });
-
-      const response = await PATCH(request);
-      expect(response.status).toBe(200);
-
-      // Verify other fields are not overwritten
-      expect(prisma.workspace.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.not.objectContaining({
-            brandName: undefined,
-            industry: undefined,
-          }),
-        })
-      );
-    });
-  });
-
-  describe('Step 3 Competitors + Keywords', () => {
-    it('should save both competitors and keywords in step 3', async () => {
+    it('should set onboarding step to 4', async () => {
       (prisma.workspace.findFirst as jest.Mock).mockResolvedValue({
         id: 'workspace-123',
         userId: 'user-123',
       });
 
-      (prisma.workspace.update as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        targetKeywords: 'skincare, beauty',
+      (prisma.user.update as jest.Mock).mockResolvedValue({
+        id: 'user-123',
+        onboardingStep: 4,
       });
 
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare, beauty',
-          competitors: [
-            { name: 'Competitor A', url: 'https://a.com', type: 'direct' },
-            { name: 'Competitor B', url: 'https://b.com', type: 'indirect' },
-          ],
         },
       });
 
       const response = await PATCH(request);
       expect(response.status).toBe(200);
 
-      expect(prisma.workspace.update).toHaveBeenCalledWith(
+      expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: { id: 'user-123' },
           data: expect.objectContaining({
-            targetKeywords: 'skincare, beauty',
+            onboardingStep: 4,
           }),
         })
       );
-    });
-
-    it('should handle empty competitors with keywords', async () => {
-      (prisma.workspace.findFirst as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        userId: 'user-123',
-      });
-
-      (prisma.workspace.update as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        targetKeywords: 'skincare',
-      });
-
-      const request = createNextRequest({
-        method: 'PATCH',
-        body: {
-          step: 3,
-          targetKeywords: 'skincare',
-          competitors: [],
-        },
-      });
-
-      const response = await PATCH(request);
-      expect(response.status).toBe(200);
     });
   });
 
@@ -427,9 +365,8 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare',
-          competitors: [],
         },
       });
 
@@ -451,14 +388,12 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare',
-          competitors: [],
         },
       });
 
       const response = await PATCH(request);
-      // Route handler doesn't check workspace ownership, it just saves
       expect(response.status).toBe(200);
     });
   });
@@ -472,13 +407,11 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare',
-          competitors: [],
         },
       });
 
-      // The route handler throws errors, so we expect them to propagate
       await expect(PATCH(request)).rejects.toThrow('Database error');
     });
 
@@ -496,94 +429,38 @@ describe('PATCH /api/onboarding - Step 4 (Keywords)', () => {
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare',
-          competitors: [],
         },
       });
 
       const response = await PATCH(request);
-      // Route handler creates workspace if missing
       expect(response.status).toBe(200);
-    });
-
-    it('should log errors for debugging', async () => {
-      (prisma.workspace.findFirst as jest.Mock).mockRejectedValue(
-        new Error('Test error')
-      );
-
-      const request = createNextRequest({
-        method: 'PATCH',
-        body: {
-          step: 3,
-          targetKeywords: 'skincare',
-          competitors: [],
-        },
-      });
-
-      try {
-        await PATCH(request);
-      } catch (error) {
-        // Error is thrown, not logged
-        expect((error as Error).message).toBe('Test error');
-      }
     });
   });
 
   describe('Response Format', () => {
-    it('should return updated workspace data', async () => {
-      const updatedWorkspace = {
-        id: 'workspace-123',
-        targetKeywords: 'skincare, beauty',
-        brandName: 'Test Brand',
-        industry: 'Beauty',
-      };
-
+    it('should return success response', async () => {
       (prisma.workspace.findFirst as jest.Mock).mockResolvedValue({
         id: 'workspace-123',
         userId: 'user-123',
       });
 
-      (prisma.workspace.update as jest.Mock).mockResolvedValue(updatedWorkspace);
+      (prisma.workspace.update as jest.Mock).mockResolvedValue({
+        id: 'workspace-123',
+        targetKeywords: 'skincare, beauty',
+      });
 
       const request = createNextRequest({
         method: 'PATCH',
         body: {
-          step: 3,
+          step: 4,
           targetKeywords: 'skincare, beauty',
-          competitors: [],
         },
       });
 
       const response = await PATCH(request);
       expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.success).toBe(true);
-    });
-
-    it('should include current step in response', async () => {
-      (prisma.workspace.update as jest.Mock).mockResolvedValue({
-        id: 'workspace-123',
-        targetKeywords: 'skincare',
-      });
-
-      (prisma.user.update as jest.Mock).mockResolvedValue({
-        id: 'user-123',
-        onboardingStep: 3,
-      });
-
-      (prisma.$transaction as jest.Mock).mockResolvedValue([]);
-
-      const request = createNextRequest({
-        method: 'PATCH',
-        body: {
-          step: 3,
-          targetKeywords: 'skincare',
-          competitors: [],
-        },
-      });
-
-      const response = await PATCH(request);
       const data = await response.json();
       expect(data.success).toBe(true);
     });

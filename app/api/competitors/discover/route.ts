@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { CompetitorFetcher } from "@/lib/competitors/fetcher";
 import { DiscoverCompetitorsInput } from "@/lib/competitors/types";
+import { deduplicateByDomain, getDeduplicationStats } from "@/lib/competitors/deduplicator";
 
 /**
  * POST /api/competitors/discover
@@ -35,12 +36,22 @@ export async function POST(request: NextRequest) {
       country,
     });
 
+    // Deduplicate competitors by domain
+    const deduplicated = deduplicateByDomain(competitors);
+    const stats = getDeduplicationStats(competitors, deduplicated);
+
     return NextResponse.json(
       {
-        competitors,
+        competitors: deduplicated,
         meta: {
-          total: competitors.length,
-          sources: [...new Set(competitors.map((c) => c.source))],
+          total: deduplicated.length,
+          sources: [...new Set(deduplicated.map((c) => c.source))],
+          deduplication: {
+            originalCount: stats.totalOriginal,
+            deduplicatedCount: stats.totalDeduplicated,
+            duplicatesRemoved: stats.duplicatesRemoved,
+            uniqueDomains: stats.uniqueDomains,
+          },
         },
       },
       { status: 200 }

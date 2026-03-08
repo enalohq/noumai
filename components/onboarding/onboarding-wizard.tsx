@@ -11,6 +11,7 @@ import { StepKeywords, type KeywordsData } from "./steps/step-keywords";
 import { StepPrompts, type PromptsData } from "./steps/step-prompts";
 import { useToast } from "@/components/ui/toast";
 import { useAutoFillMarket } from "./hooks/useAutoFillMarket";
+import { extractCompetitorKeywords } from "@/lib/onboarding/extract-competitor-keywords";
 
 type ToastService = ReturnType<typeof useToast>;
 
@@ -207,7 +208,7 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
         showToast("Step 2 completed! Moving to competitor tracking.", "success");
         setCurrentStep(3);
       } else if (currentStep === 3) {
-        await saveStep(3, state.competitors);
+        await saveStep(3, { competitors: state.competitors.competitors });
         showToast("Step 3 completed! Moving to keyword tracking.", "success");
         setCurrentStep(4);
       } else if (currentStep === 4) {
@@ -215,23 +216,23 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
           setError("Please enter at least one target keyword.");
           return;
         }
-        // Save keywords to step 3 (targetKeywords field in competitors object)
-        await saveStep(3, { ...state.competitors, targetKeywords: state.keywords.targetKeywords });
+        // Save keywords to dedicated step 4
+        await saveStep(4, { targetKeywords: state.keywords.targetKeywords });
         showToast("Step 4 completed! Moving to prompt selection.", "success");
         setCurrentStep(5);
       } else if (currentStep === 5) {
-        await saveStep(4, { prompts: state.prompts.selectedPrompts });
+        await saveStep(5, { prompts: state.prompts.selectedPrompts });
         showToast("Onboarding complete! Welcome to NoumAI.", "success", 4000);
         updateSession().catch(() => {});
         setTimeout(() => {
           router.push("/");
         }, 1000);
       }
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message === "NetworkError when attempting to fetch resource")) {
         setError("Network error. Please check your internet connection.");
       } else {
-        setError(err?.message || "Something went wrong. Please try again.");
+        setError((err instanceof Error ? err.message : String(err)) || "Something went wrong. Please try again.");
       }
       showToast("Failed to save step", "error");
     }
@@ -254,11 +255,11 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
       setTimeout(() => {
         router.push("/");
       }, 1000);
-    } catch (err: any) {
+    } catch (err: Error | unknown) {
       if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message === "NetworkError when attempting to fetch resource")) {
         setError("Network error. Please check your internet connection.");
       } else {
-        setError(err?.message || "Something went wrong.");
+        setError((err instanceof Error ? err.message : String(err)) || "Something went wrong.");
       }
       showToast("Failed to skip onboarding", "error");
     } finally {
@@ -381,6 +382,9 @@ export function OnboardingWizard({ toastService }: OnboardingWizardProps = {}) {
               <StepKeywords
                 data={state.keywords || { targetKeywords: "" }}
                 onChange={(keywords) => setState((s) => ({ ...s, keywords }))}
+                suggestedKeywords={extractCompetitorKeywords(
+                  state.competitors.competitors.map((c) => c.name)
+                )}
               />
             )}
             {currentStep === 5 && (

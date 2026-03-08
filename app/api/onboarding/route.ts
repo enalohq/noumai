@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateStarterPrompts } from "@/lib/onboarding/generate-prompts";
 import { autoFillMarket } from "@/lib/onboarding/auto-fill-market";
+import { normalizeKeywords, keywordsToString } from "@/lib/onboarding/keyword-normalizer";
 
 /**
  * GET /api/onboarding — Onboarding always uses primary workspace.
@@ -187,7 +188,7 @@ export async function PATCH(request: NextRequest) {
     await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 2 } });
 
   } else if (step === 3) {
-    const { targetKeywords, competitors, autoDiscover } = body;
+    const { competitors, autoDiscover } = body;
 
     // Get existing workspace data for auto-discovery
     let autoDiscoveredCompetitors: Array<{ name: string; url?: string | null; type: string }> = [];
@@ -253,15 +254,25 @@ export async function PATCH(request: NextRequest) {
             },
           })
         ),
-      prisma.workspace.update({
-        where: { id: workspaceId },
-        data: { targetKeywords: targetKeywords ?? undefined },
-      }),
-      // Step 3 no longer completes onboarding — step 4 (prompts) does
+      // Step 3 no longer saves keywords — step 4 does
       prisma.user.update({ where: { id: userId }, data: { onboardingStep: 3 } }),
     ]);
 
   } else if (step === 4) {
+    const { targetKeywords } = body;
+
+    // Normalize keywords: trim, lowercase, remove duplicates
+    const normalizedKeywords = targetKeywords
+      ? keywordsToString(normalizeKeywords(targetKeywords))
+      : undefined;
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { targetKeywords: normalizedKeywords ?? undefined },
+    });
+    await prisma.user.update({ where: { id: userId }, data: { onboardingStep: 4 } });
+
+  } else if (step === 5) {
     const { prompts } = body;
     const validPrompts = Array.isArray(prompts)
       ? prompts.filter((p: unknown) => typeof p === "string" && (p as string).trim())
@@ -275,7 +286,7 @@ export async function PATCH(request: NextRequest) {
     });
     await prisma.user.update({
       where: { id: userId },
-      data: { onboardingCompleted: true, onboardingStep: 4 },
+      data: { onboardingCompleted: true, onboardingStep: 5 },
     });
 
     // Also create TrackedPrompt rows (skip duplicates by checking existing text)
