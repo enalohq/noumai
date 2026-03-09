@@ -43,3 +43,14 @@ function sanitizeNameAndUrl(name: string, url: string): { name: string; url: str
 
   return { name, url };
 }
+
+/**
+ * Formats a URL for clean display by removing protocol and 'www.'
+ */
+export function formatDisplayUrl(url: string | undefined): string {
+  if (!url) return "";
+  return url
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/$/, "");
+}

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import type { Battlecard, CompetitorData } from "@/components/dashboard/types";
-import { sanitizeCompetitor } from "@/lib/competitors/utils";
+import { sanitizeCompetitor, formatDisplayUrl } from "@/lib/competitors/utils";
 
 type BattlecardsTabProps = {
   competitors: CompetitorData[];
@@ -183,7 +183,7 @@ export function BattlecardsTab({
                 <div className="text-xs font-semibold text-th-text whitespace-nowrap">{c.name}</div>
                 {c.url && (
                   <div className="text-[10px] font-medium text-th-text-accent truncate max-w-[80px]" title={c.url}>
-                    {c.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    {formatDisplayUrl(c.url)}
                   </div>
                 )}
                 <div className="text-[10px] font-medium text-th-text-muted capitalize bg-th-card-alt px-1 rounded border border-th-border/50">
