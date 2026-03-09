@@ -298,6 +298,7 @@ const demoAuditReport: AuditReport = {
   schemaMentions: 5,
   blufDensity: 0.85,
   pass: { llmsTxt: true, schema: true, bluf: true },
+  createdAt: "2026-02-14T10:30:00.000Z",
 };
 
 /* ─────────────────────────  Drift Alerts ───────────────────────── */
@@ -365,6 +366,11 @@ export const DEMO_STATE: AppState = {
   battlecards: demoBattlecards,
   runs: generateRuns(),
   auditReport: demoAuditReport,
+  auditHistory: [
+    { ...demoAuditReport, createdAt: "2026-02-14T10:30:00.000Z" },
+    { ...demoAuditReport, score: 75, createdAt: "2026-02-10T14:20:00.000Z" },
+    { ...demoAuditReport, score: 72, createdAt: "2026-02-05T09:15:00.000Z" },
+  ],
   scheduleEnabled: true,
   scheduleIntervalMs: 21600000,
   lastScheduledRun: "2026-02-14T06:00:00.000Z",
