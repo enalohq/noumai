@@ -59,7 +59,7 @@ export const tabMeta: Record<TabKey, { title: string; tooltip: string; details: 
     title: "AEO Audit",
     tooltip: "Audit site readiness for LLM discovery.",
     details:
-      "Run checks for llms.txt, schema signals, and BLUF-style clarity indicators to quickly assess AI-answer readiness of a target URL.",
+      "Run checks for llms.txt, schema signals, and BLUF-style clarity indicators to quickly assess AI-answer readiness.",
   },
   Documentation: {
     title: "Documentation",

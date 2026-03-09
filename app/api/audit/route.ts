@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
 const bodySchema = z.object({
   url: z.string().url(),
@@ -75,7 +77,7 @@ export async function POST(req: NextRequest) {
       value: llmsRes.ok ? "Present" : "Missing",
       detail: llmsRes.ok
         ? `Found at ${target.origin}/llms.txt (${llmsRes.text.length} bytes)`
-        : "No llms.txt file found. This file tells AI models about your site\u2019s purpose and preferred content.",
+        : "No llms.txt file found. This file tells AI models about your site's purpose and preferred content.",
     });
 
     // 2. llms-full.txt
@@ -113,9 +115,9 @@ export async function POST(req: NextRequest) {
       value: robotsRes.ok ? `${blockedBots.length} blocked / ${aiBots.length} checked` : "No robots.txt",
       detail: robotsRes.ok
         ? blockedBots.length > 0
-          ? `Blocked: ${blockedBots.join(", ")}. Allowed: ${allowedBots.slice(0, 5).join(", ")}${allowedBots.length > 5 ? "\u2026" : ""}`
+          ? `Blocked: ${blockedBots.join(", ")}. Allowed: ${allowedBots.slice(0, 5).join(", ")}${allowedBots.length > 5 ? "..." : ""}`
           : "All major AI bots are allowed to crawl."
-        : "No robots.txt found \u2014 AI bots will default to crawling all pages.",
+        : "No robots.txt found — AI bots will default to crawling all pages.",
     });
 
     // 4. Sitemap
@@ -173,7 +175,7 @@ export async function POST(req: NextRequest) {
       pass: hasFaqSchema || hasFaqHtml,
       value: hasFaqSchema ? "Schema present" : hasFaqHtml ? "HTML only (no schema)" : "Missing",
       detail: hasFaqSchema
-        ? "FAQPage schema found \u2014 AI models can extract Q&A pairs."
+        ? "FAQPage schema found — AI models can extract Q&A pairs."
         : hasFaqHtml
           ? "FAQ-like HTML elements found but no FAQPage schema markup. Add JSON-LD FAQPage schema."
           : "No FAQ content or schema detected. FAQ schema dramatically improves AI answer citations.",
@@ -208,8 +210,8 @@ export async function POST(req: NextRequest) {
       value: metaDesc ? `${metaDesc.length} chars` : "Missing",
       detail: metaDesc
         ? metaDescOk
-          ? `Good length (${metaDesc.length} chars): "${metaDesc.slice(0, 100)}\u2026"`
-          : `Length ${metaDesc.length} chars \u2014 ${metaDesc.length < 50 ? "too short" : "too long"}. Aim for 50\u2013160 characters.`
+          ? `Good length (${metaDesc.length} chars): "${metaDesc.slice(0, 100)}..."`
+          : `Length ${metaDesc.length} chars — ${metaDesc.length < 50 ? "too short" : "too long"}. Aim for 50–160 characters.`
         : "No meta description found. AI tools use this as a content summary.",
     });
 
@@ -222,7 +224,7 @@ export async function POST(req: NextRequest) {
       pass: hasCanonical,
       value: hasCanonical ? "Present" : "Missing",
       detail: hasCanonical
-        ? "Canonical tag found \u2014 helps prevent duplicate content issues."
+        ? "Canonical tag found — helps prevent duplicate content issues."
         : "No canonical tag. Add one to ensure AI models reference the correct URL.",
     });
 
@@ -243,8 +245,8 @@ export async function POST(req: NextRequest) {
       pass: blufScore >= 0.5,
       value: `${Math.round(blufScore * 100)}%`,
       detail: hasDirectAnswer
-        ? "Content leads with a direct answer \u2014 good for AI citation."
-        : "Content doesn\u2019t lead with a clear direct answer. Start with a BLUF (Bottom Line Up Front) statement.",
+        ? "Content leads with a direct answer — good for AI citation."
+        : "Content doesn't lead with a clear direct answer. Start with a BLUF (Bottom Line Up Front) statement.",
     });
 
     // 11. Heading Hierarchy
@@ -261,10 +263,10 @@ export async function POST(req: NextRequest) {
       detail: h1Count === 0
         ? "No H1 tag found. Every page should have exactly one H1."
         : h1Count > 1
-          ? `${h1Count} H1 tags found \u2014 use exactly one. AI models use H1 as primary topic signal.`
+          ? `${h1Count} H1 tags found — use exactly one. AI models use H1 as primary topic signal.`
           : h2Count < 2
             ? "Only 1 H2 or none. Use H2 subheadings to break content into scannable sections."
-            : "Good heading hierarchy \u2014 single H1 with multiple H2/H3 subheadings.",
+            : "Good heading hierarchy — single H1 with multiple H2/H3 subheadings.",
     });
 
     // 12. Content Length
@@ -278,9 +280,9 @@ export async function POST(req: NextRequest) {
       value: `${wordCount.toLocaleString()} words`,
       detail: contentLengthOk
         ? wordCount > 2000
-          ? "Comprehensive content \u2014 great for in-depth AI citations."
+          ? "Comprehensive content — great for in-depth AI citations."
           : "Adequate content length for AI answer extraction."
-        : "Thin content \u2014 AI models prefer pages with 300+ words for citation. Add more substance.",
+        : "Thin content — AI models prefer pages with 300+ words for citation. Add more substance.",
     });
 
     // 13. Internal Links
@@ -294,7 +296,7 @@ export async function POST(req: NextRequest) {
       pass: internalLinkOk,
       value: `${internalLinks} links`,
       detail: internalLinkOk
-        ? "Good internal linking \u2014 helps AI models discover related content."
+        ? "Good internal linking — helps AI models discover related content."
         : "Few internal links. Add 3+ contextual internal links to help AI models map your content.",
     });
 
@@ -310,7 +312,7 @@ export async function POST(req: NextRequest) {
       category: "technical",
       pass: isHttps,
       value: isHttps ? "Yes" : "No",
-      detail: isHttps ? "Site uses HTTPS \u2014 required for trust signals." : "Site is not using HTTPS. This hurts trust and AI citation likelihood.",
+      detail: isHttps ? "Site uses HTTPS — required for trust signals." : "Site is not using HTTPS. This hurts trust and AI citation likelihood.",
     });
 
     // 15. Page Size
@@ -337,7 +339,7 @@ export async function POST(req: NextRequest) {
       pass: hasLang,
       value: hasLang ? langMatch![1] : "Missing",
       detail: hasLang
-        ? `Language set to "${langMatch![1]}" \u2014 helps AI models serve correct language results.`
+        ? `Language set to "${langMatch![1]}" — helps AI models serve correct language results.`
         : 'No lang attribute on <html>. Add lang="en" (or your language) for AI localization.',
     });
 
@@ -445,19 +447,54 @@ export async function POST(req: NextRequest) {
     // Legacy compat
     const schemaMentions = jsonLdBlocks.length + (html.match(/schema\.org/gi) ?? []).length;
 
-    return NextResponse.json({
+    const report = {
       url,
       score,
       checks,
       llmsTxtPresent: llmsRes.ok,
       schemaMentions,
       blufDensity: blufScore,
+      createdAt: new Date().toISOString(),
       pass: {
         llmsTxt: llmsRes.ok,
         schema: schemaMentions > 0,
         bluf: blufScore >= 0.5,
       },
-    });
+    };
+
+    // ── Persist to Database ─────────────────────────────
+    try {
+      const session = await auth();
+      if (session?.user?.id) {
+        const headerWsId = req.headers.get("X-Workspace-Id");
+        let workspaceId = headerWsId;
+
+        if (!workspaceId) {
+          const membership = await prisma.workspaceMember.findFirst({
+            where: { userId: session.user.id },
+            orderBy: { createdAt: "asc" },
+            select: { workspaceId: true },
+          });
+          workspaceId = membership?.workspaceId || null;
+        }
+
+        if (workspaceId) {
+          await prisma.aeoAudit.create({
+            data: {
+              workspaceId,
+              url,
+              score,
+              report: report as any,
+              createdAt: report.createdAt,
+            },
+          });
+        }
+      }
+    } catch (saveErr) {
+      console.error("[api/audit] Failed to persist audit to DB:", saveErr);
+    }
+
+    return NextResponse.json(report);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

@@ -80,6 +80,9 @@ model Workspace {
   // Scrape runs
   scrapeRuns       ScrapeRun[]
 
+  // AEO Audits
+  aeoAudits        AeoAudit[]
+
   // Tracked prompts
   trackedPrompts   TrackedPrompt[]
 
@@ -180,4 +183,18 @@ model ScrapeRun {
 
   @@index([workspaceId, createdAt])
   @@index([promptId, createdAt])
+}
+
+model AeoAudit {
+  id          String   @id @default(cuid())
+  workspaceId String
+  url         String
+  score       Int
+  report      Json     // Stores the full AuditReport JSON
+  
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
 }

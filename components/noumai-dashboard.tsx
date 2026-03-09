@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadNoumAIValue, saveNoumAIValue, clearNoumAIStore } from "@/lib/client/noumai-store";
 import { sanitizeCompetitor } from "@/lib/competitors/utils";
 import { useServerRuns } from "@/lib/client/use-server-runs";
+import { useAeoAudit } from "@/lib/client/use-aeo-audit";
 import { useTrackedPrompts } from "@/lib/client/use-tracked-prompts";
 import { useDashboardKpis } from "@/lib/client/use-dashboard-kpis";
 import {
@@ -41,8 +42,10 @@ const WORKSPACES_KEY = "noumai-workspaces";
 const ACTIVE_WS_KEY = "noumai-active-workspace";
 const THEME_KEY = "noumai-theme";
 
-function storageKeyForWorkspace(wsId: string) {
-  return wsId === "default" ? STORAGE_KEY : `noumai-${wsId}`;
+/** User-scoped workspace key to ensure data isolation on shared devices */
+function storageKeyForWorkspace(wsId: string, email?: string | null) {
+  const prefix = email ? `noumai-v1-${email.replace(/[^a-zA-Z0-9]/g, "_")}` : "noumai-v1-anon";
+  return `${prefix}-${wsId}`;
 }
 
 function generateId() {
@@ -77,6 +80,8 @@ const defaultState: AppState = {
   battlecards: [],
   runs: [],
   auditReport: null,
+  auditHistory: [],
+  /** In-app scheduling */
   scheduleEnabled: false,
   scheduleIntervalMs: 21600000,
   lastScheduledRun: null,
@@ -87,7 +92,7 @@ const defaultState: AppState = {
 
 export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {}) {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<TabKey>("Competitor Battlecards");
+  const [activeTab, setActiveTab] = useState<TabKey>("AEO Audit");
   const [state, setState] = useState<AppState>(demoMode ? DEMO_STATE : defaultState);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(demoMode ? "Demo mode — read-only preview" : "");
@@ -131,6 +136,12 @@ export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {
     active: false,
   });
   const scrapeElapsed = useScrapeTimer(scrapeProgress.active);
+
+  // Server-side audit history persistence
+  const { loadHistory, runAudit: executeAudit, loading: auditLoading } = useAeoAudit({
+    disabled: demoMode,
+    workspaceId: resolvedWorkspaceId,
+  });
 
   // Keep progress.elapsedSeconds in sync with the timer
   useEffect(() => {
@@ -222,22 +233,38 @@ export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {
   useEffect(() => {
     if (demoMode || !activeWsId) return;
     let mounted = true;
-    const key = storageKeyForWorkspace(activeWsId);
-    loadNoumAIValue<AppState>(key, defaultState).then(async (data) => {
+    const key = storageKeyForWorkspace(activeWsId, session?.user?.email);
+    const legacyKey = `noumai-${activeWsId}`;
+
+    const loadAndMigrate = async () => {
+      // 1. Try new user-scoped key
+      let data = await loadNoumAIValue<AppState>(key, null as any);
+
+      // 2. Migration fallback: check legacy key
+      if (!data && activeWsId !== "default") {
+        data = await loadNoumAIValue<AppState>(legacyKey, null as any);
+        if (data) {
+          // Found legacy data — move to new key and keep it
+          await saveNoumAIValue(key, data);
+        }
+      }
+
+      // 3. Last fallback: defaultState
+      if (!data) data = defaultState;
+
       if (!mounted) return;
 
-      // Merge saved state with defaults so new fields are never undefined
+      // Merge saved state with defaults
       const merged: AppState = {
         ...defaultState,
         ...data,
         brand: { ...defaultState.brand, ...(data.brand ?? {}) },
+        auditHistory: Array.isArray(data.auditHistory) ? data.auditHistory : [],
         provider: ALL_PROVIDERS.includes(data.provider as Provider)
           ? (data.provider as Provider)
           : defaultState.provider,
         activeProviders: Array.isArray(data.activeProviders)
-          ? data.activeProviders.filter((provider): provider is Provider =>
-              ALL_PROVIDERS.includes(provider as Provider),
-            )
+          ? data.activeProviders.filter((p): p is Provider => ALL_PROVIDERS.includes(p as Provider))
           : [],
         competitors: Array.isArray(data.competitors)
           ? data.competitors.map(sanitizeCompetitor)
@@ -321,7 +348,33 @@ export function NoumAIDashboard({ demoMode = false }: { demoMode?: boolean } = {
       if (!demoMode) {
         loadPrompts().catch(() => {});
       }
-    });
+
+      // Hydro-sync: Pull latest history from server and merge local
+      if (activeWsId) {
+        loadHistory().then((history) => {
+          if (history && mounted) {
+            setState((prev) => {
+              const existingIds = new Set(prev.auditHistory.map((a) => a.createdAt));
+              const freshItems = history.filter((a) => !existingIds.has(a.createdAt));
+              const combined = [...freshItems, ...prev.auditHistory]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 50);
+
+              if (freshItems.length === 0 && prev.auditReport) return prev;
+
+              return { 
+                ...prev, 
+                auditHistory: combined,
+                auditReport: prev.auditReport || combined[0] || null
+              };
+            });
+          }
+        });
+      }
+    };
+
+    loadAndMigrate();
+
     return () => {
       mounted = false;
     };
@@ -1007,15 +1060,14 @@ Now analyze all ${competitorNames.length} competitors:`,
     setMessage("Running AEO audit…");
 
     try {
-      const response = await fetch("/api/audit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: website }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Audit failed");
+      const data = await executeAudit(website);
+      if (!data) throw new Error("Audit failed");
 
-      setState((prev) => ({ ...prev, auditReport: data }));
+      setState((prev) => ({
+        ...prev,
+        auditReport: data,
+        auditHistory: [data, ...prev.auditHistory].slice(0, 50),
+      }));
       setMessage("Audit complete.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed running audit.");
@@ -1159,8 +1211,11 @@ Now analyze all ${competitorNames.length} competitors:`,
       <AeoAuditTab
         brandWebsite={state.brand.website || ""}
         auditReport={state.auditReport}
+        history={state.auditHistory ?? []}
         onRunAudit={runAudit}
-        busy={busy}
+        onSelectAudit={(report) => setState((prev) => ({ ...prev, auditReport: report }))}
+        busy={busy || auditLoading}
+        demoMode={demoMode}
       />
     );
   }
@@ -1262,8 +1317,13 @@ Now analyze all ${competitorNames.length} competitors:`,
             return (
               <div key={tab}>
                 {isSettings && (
-                  <div className="mb-1 px-2 text-xs font-medium uppercase tracking-wider text-th-text-muted">
+                  <div className="mb-1 mt-2 border-t border-th-border pt-2 px-2 text-xs font-medium uppercase tracking-wider text-th-text-muted">
                     Setup
+                  </div>
+                )}
+                {tab === "Competitor Battlecards" && (
+                  <div className="mb-1 mt-2 border-t border-th-border pt-2 px-2 text-xs font-medium uppercase tracking-wider text-th-text-muted">
+                    Pillars
                   </div>
                 )}
                 <button
@@ -1286,11 +1346,6 @@ Now analyze all ${competitorNames.length} competitors:`,
                     </span>
                   )}
                 </button>
-                {isSettings && (
-                  <div className="mb-1 mt-2 border-t border-th-border pt-2 px-2 text-xs font-medium uppercase tracking-wider text-th-text-muted">
-                    Pillars
-                  </div>
-                )}
               </div>
             );
           })}

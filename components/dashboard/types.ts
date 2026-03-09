@@ -73,6 +73,7 @@ export type AuditReport = {
   llmsTxtPresent: boolean;
   schemaMentions: number;
   blufDensity: number;
+  createdAt: string;
   pass: {
     llmsTxt: boolean;
     schema: boolean;
@@ -159,6 +160,7 @@ export type AppState = {
   battlecards: Battlecard[];
   runs: ScrapeRun[];
   auditReport: AuditReport | null;
+  auditHistory: AuditReport[];
   /** In-app scheduling */
   scheduleEnabled: boolean;
   scheduleIntervalMs: ScheduleInterval;
@@ -168,6 +170,7 @@ export type AppState = {
 };
 
 export const tabs = [
+  "AEO Audit",
   "Competitor Battlecards",
   "Prompts",
   "Prompt Explorer",
@@ -176,7 +179,6 @@ export const tabs = [
   "Visibility Analytics",
   "Citations",
   "Citation Opportunities",
-  "AEO Audit",
   "Automation",
   "Documentation",
   "Settings",
