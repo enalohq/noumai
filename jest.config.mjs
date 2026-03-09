@@ -26,6 +26,7 @@ const customJestConfig = {
     // Handle static assets
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
     '\\.(jpg|jpeg|png|gif|webp|svg)$': '<rootDir>/__mocks__/fileMock.js',
+    '^until-async$': '<rootDir>/__mocks__/until-async.js',
   },
   
   // Test discovery

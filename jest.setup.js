@@ -1,7 +1,7 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 import util from 'util';
-import { ReadableStream } from 'stream/web';
+import { ReadableStream, WritableStream, TransformStream } from 'stream/web';
 
 // Set test environment
 process.env.NODE_ENV = 'test';
@@ -15,9 +15,26 @@ if (typeof global.TextEncoder === 'undefined') {
   global.TextDecoder = util.TextDecoder;
 }
 
-// Add ReadableStream polyfill for LangChain compatibility
+// Add Web Streams API polyfills for LangChain and MSW compatibility
 if (typeof global.ReadableStream === 'undefined') {
   global.ReadableStream = ReadableStream;
+}
+if (typeof global.WritableStream === 'undefined') {
+  global.WritableStream = WritableStream;
+}
+if (typeof global.TransformStream === 'undefined') {
+  global.TransformStream = TransformStream;
+}
+
+// Add BroadcastChannel polyfill for MSW compatibility
+if (typeof global.BroadcastChannel === 'undefined') {
+  global.BroadcastChannel = class {
+    constructor() {}
+    postMessage() {}
+    close() {}
+    addEventListener() {}
+    removeEventListener() {}
+  };
 }
 
 // Add Web APIs that are missing in Jest environment
@@ -122,6 +139,7 @@ jest.mock('@/lib/prisma', () => ({
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
       upsert: jest.fn(),
     },
     workspace: {
@@ -131,6 +149,7 @@ jest.mock('@/lib/prisma', () => ({
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
       upsert: jest.fn(),
     },
     workspaceMember: {
@@ -159,6 +178,7 @@ jest.mock('@/lib/prisma', () => ({
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
       upsert: jest.fn(),
     },
     $transaction: jest.fn(),

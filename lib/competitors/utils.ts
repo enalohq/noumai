@@ -15,11 +15,13 @@ export function sanitizeCompetitor(c: Partial<CompetitorData> | string): Competi
   const rawUrl = c.url?.trim() || "";
   const type = c.type || "direct";
   const isAutoDiscovered = !!c.isAutoDiscovered;
+  const confidence = c.confidence;
 
   return {
     ...sanitizeNameAndUrl(rawName, rawUrl),
     type,
     isAutoDiscovered,
+    confidence,
   };
 }
 

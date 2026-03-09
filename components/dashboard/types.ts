@@ -46,6 +46,7 @@ export interface CompetitorData {
   url?: string;
   type: "direct" | "indirect" | "substitute";
   isAutoDiscovered?: boolean;
+  confidence?: number;
 }
 
 export type Battlecard = {
