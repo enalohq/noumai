@@ -280,6 +280,7 @@ const demoBattlecards: Battlecard[] = [
 const demoAuditReport: AuditReport = {
   url: "https://geoaeotracker.com",
   score: 78,
+  createdAt: "2026-02-14T10:30:00.000Z",
   checks: [
     { id: "llms-txt", label: "llms.txt present", category: "discovery", pass: true, value: "Found", detail: "/llms.txt returns 200 with valid directives" },
     { id: "robots-txt", label: "robots.txt configured", category: "discovery", pass: true, value: "Found", detail: "robots.txt allows major AI crawlers" },
@@ -298,7 +299,6 @@ const demoAuditReport: AuditReport = {
   schemaMentions: 5,
   blufDensity: 0.85,
   pass: { llmsTxt: true, schema: true, bluf: true },
-  createdAt: "2026-02-14T10:30:00.000Z",
 };
 
 /* ─────────────────────────  Drift Alerts ───────────────────────── */
