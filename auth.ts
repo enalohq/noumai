@@ -89,6 +89,10 @@ const config: NextAuthConfig = {
   },
   callbacks: {
     async signIn({ user, account }) {
+      if (!user.email || !account) {
+        return false;
+      }
+
       // Scenario 1: OAuth account linking (Email/Password → OAuth)
       if (account?.provider !== "credentials" && user?.email && account) {
         try {
@@ -97,6 +101,15 @@ const config: NextAuthConfig = {
           if (!result.success) {
             console.error("OAuth account linking failed:", result.error);
             return false;
+          }
+
+          // For new OAuth users, set emailVerified to now
+          if (result.action === 'created') {
+            await prisma.user.update({
+              where: { email: user.email },
+              data: { emailVerified: new Date() },
+            });
+            console.log(`Set emailVerified for new OAuth user: ${user.email}`);
           }
 
           if (result.action === 'linked') {
