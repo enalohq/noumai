@@ -17,10 +17,10 @@ export interface BrandData {
 export interface BrandNameProvider {
   /** Provider identifier for debugging */
   readonly name: string;
-  
+
   /** Check if this provider can fetch brand data for the given URL */
   canFetch(url: string): boolean;
-  
+
   /** Fetch brand data from this provider */
   fetch(url: string): Promise<BrandData>;
 }
@@ -31,6 +31,7 @@ import {
   extractSocialFromStructuredData,
   extractSocialFromInlineScripts,
 } from './social-handle-extractor';
+import { BrandNameSanitizer } from './brand-name-sanitizer';
 
 /**
  * HTML Scraping Provider - extracts brand data from website HTML
@@ -76,17 +77,17 @@ export class HtmlScrapingProvider implements BrandNameProvider {
   private extractBrandData(html: string, url?: string): BrandData {
     // Extract brand name
     const brandName = this.extractBrandName(html, url);
-    
+
     // Try to extract social handles from JSON-LD structured data first
     const structuredData = extractSocialFromStructuredData(html);
     let twitterHandle = structuredData.twitter || null;
     let linkedinHandle = structuredData.linkedin || null;
-    
+
     // Debug logging
     if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
       console.log('[HtmlScrapingProvider] Structured data extraction:', structuredData);
     }
-    
+
     // Fallback to inline script extraction (e.g., beautybarn.in embeds social links in regular script tags)
     if (!twitterHandle || !linkedinHandle) {
       const inlineData = extractSocialFromInlineScripts(html);
@@ -100,7 +101,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
         console.log('[HtmlScrapingProvider] Inline script extraction:', { twitter: inlineData.twitter, linkedin: inlineData.linkedin });
       }
     }
-    
+
     // Fallback to HTML extraction if not found in structured data or inline scripts
     if (!twitterHandle) {
       twitterHandle = extractTwitterHandle(html);
@@ -111,11 +112,11 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     if (!linkedinHandle) {
       linkedinHandle = extractLinkedinUrl(html);
     }
-    
+
     if (typeof console !== 'undefined' && process.env.NODE_ENV === 'development') {
       console.log('[HtmlScrapingProvider] Final result:', { brandName, twitterHandle, linkedinHandle });
     }
-    
+
     return { brandName, twitterHandle, linkedinHandle };
   }
 
@@ -123,7 +124,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     // Try og:site_name first (most reliable)
     const ogSiteName = this.extractMeta(html, ['og:site_name']);
     if (ogSiteName && ogSiteName.length >= 2) {
-      const cleaned = this.cleanBrandName(ogSiteName);
+      const cleaned = BrandNameSanitizer.sanitize(ogSiteName);
       // If cleaned name is still too long, use NER with URL fallback
       if (cleaned && cleaned.length > 30) {
         const nerName = this.extractOrganizationWithNER(ogSiteName, url);
@@ -137,13 +138,13 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     // Try application/name meta tag
     const appName = this.extractMeta(html, ['application-name']);
     if (appName && appName.length >= 2) {
-      return this.cleanBrandName(appName);
+      return BrandNameSanitizer.sanitize(appName);
     }
 
     // Try og:title
     const ogTitle = this.extractMeta(html, ['og:title']);
     if (ogTitle) {
-      const cleaned = this.cleanBrandName(ogTitle);
+      const cleaned = BrandNameSanitizer.sanitize(ogTitle);
       if (cleaned && cleaned.length >= 2) {
         // If cleaned name is still too long, use NER with URL fallback
         if (cleaned.length > 30) {
@@ -160,7 +161,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     if (titleMatch) {
       const title = titleMatch[1].trim();
-      const cleaned = this.cleanBrandName(title);
+      const cleaned = BrandNameSanitizer.sanitize(title);
       if (cleaned) {
         // If cleaned name is still too long, use NER with URL fallback
         if (cleaned.length > 30) {
@@ -209,7 +210,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
         // Invalid URL, continue with NER
       }
     }
-    
+
     // Try NER as secondary source
     try {
       let doc;
@@ -221,11 +222,11 @@ export class HtmlScrapingProvider implements BrandNameProvider {
         // compromise not installed, skip NER
         return null;
       }
-      
+
       if (doc) {
         // Extract organization entities
         const organizations: string[] = doc.organizations().out('array');
-        
+
         if (organizations.length > 0) {
           // Return the first organization found
           const orgName = organizations[0];
@@ -233,7 +234,7 @@ export class HtmlScrapingProvider implements BrandNameProvider {
             return orgName;
           }
         }
-        
+
         // Try to find company suffixes in the text
         const companySuffixes = /\b(Inc\.?|LLC|Ltd\.?|Corp\.?|Corporation|Company|Co\.?)\b/i;
         const suffixMatch = text.match(companySuffixes);
@@ -252,70 +253,14 @@ export class HtmlScrapingProvider implements BrandNameProvider {
     } catch {
       // NER failed, continue
     }
-    
+
     return null;
-  }
-
-  private cleanBrandName(text: string): string | null {
-    if (!text) return null;
-    
-    // Decode HTML entities
-    const decoded = this.decodeHtmlEntities(text);
-    
-    // Remove common separators and everything after them
-    // Handles: | - – — :: and variations
-    const cleaned = decoded
-      .replace(/\s*[\|\-–—]\s*.*$/i, '')  // Remove | - – — and everything after
-      .replace(/\s*::\s*.*$/i, '')         // Remove :: and everything after
-      .replace(/\s*[-–—]\s*(bulk|manufacturer|distributor|supplier|wholesale|retail|store|shop|online|india|usa|uk|co\.?m?|org|net|io).*$/i, '') // Remove common business descriptors
-      .trim();
-    
-    // Return the cleaned name - caller will handle length validation
-    return cleaned && cleaned.length >= 2 ? cleaned : null;
-  }
-
-  private decodeHtmlEntities(text: string): string {
-    // Create a map of common HTML entities
-    const entities: { [key: string]: string } = {
-      '&amp;': '&',
-      '&lt;': '<',
-      '&gt;': '>',
-      '&quot;': '"',
-      '&#39;': "'",
-      '&#8211;': '–',  // en-dash
-      '&#8212;': '—',  // em-dash
-      '&#8217;': "'",  // right single quotation mark
-      '&#8220;': '"',  // left double quotation mark
-      '&#8221;': '"',  // right double quotation mark
-      '&ndash;': '–',
-      '&mdash;': '—',
-      '&rsquo;': "'",
-      '&ldquo;': '"',
-      '&rdquo;': '"',
-    };
-    
-    let decoded = text;
-    for (const [entity, char] of Object.entries(entities)) {
-      decoded = decoded.replace(new RegExp(entity, 'g'), char);
-    }
-    
-    // Handle numeric entities like &#123;
-    decoded = decoded.replace(/&#(\d+);/g, (match, code) => {
-      return String.fromCharCode(parseInt(code, 10));
-    });
-    
-    // Handle hex entities like &#x1F;
-    decoded = decoded.replace(/&#x([0-9a-f]+);/gi, (match, code) => {
-      return String.fromCharCode(parseInt(code, 16));
-    });
-    
-    return decoded;
   }
 
   private extractMeta(html: string, selectors: string[]): string | null {
     for (const selector of selectors) {
       const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
+
       const patterns = [
         `<meta\\s+[^>]*property=["']${escapedSelector}["'][^>]*content=["']([^"']*)["']`,
         `<meta\\s+[^>]*name=["']${escapedSelector}["'][^>]*content=["']([^"']*)["']`,
@@ -347,17 +292,17 @@ export class UrlFallbackProvider implements BrandNameProvider {
     try {
       const urlObj = new URL(url);
       const hostname = urlObj.hostname;
-      
+
       // Remove www. prefix
       const cleanHostname = hostname.replace(/^www\./i, '');
-      
+
       // Get main domain part
       const parts = cleanHostname.split('.');
       const mainPart = parts[0];
-      
+
       // Convert to title case
       const brandName = mainPart.charAt(0).toUpperCase() + mainPart.slice(1);
-      
+
       return { brandName, twitterHandle: null, linkedinHandle: null };
     } catch {
       return { brandName: null, twitterHandle: null, linkedinHandle: null };
@@ -401,7 +346,7 @@ export class BrandfetchProvider implements BrandNameProvider {
       }
 
       const data = await response.json();
-      
+
       // Validate and extract from Brandfetch response
       if (this.isValidBrandfetchResponse(data)) {
         return {
@@ -410,7 +355,7 @@ export class BrandfetchProvider implements BrandNameProvider {
           linkedinHandle: this.extractLinkedinHandle(data),
         };
       }
-      
+
       return { brandName: null, twitterHandle: null, linkedinHandle: null };
     } catch {
       return { brandName: null, twitterHandle: null, linkedinHandle: null };
@@ -420,11 +365,11 @@ export class BrandfetchProvider implements BrandNameProvider {
   private extractTwitterHandle(data: Record<string, unknown>): string | null {
     const links = data.links as Array<{ name: string; url: string }> | undefined;
     if (!links) return null;
-    
+
     const twitterLink = links.find(
       (link) => link.name === 'twitter' || link.name === 'x'
     );
-    
+
     if (twitterLink?.url) {
       const match = twitterLink.url.match(/twitter\.com\/[@]?([^/\s]+)/i);
       if (match) {
@@ -434,31 +379,31 @@ export class BrandfetchProvider implements BrandNameProvider {
         }
       }
     }
-    
+
     return null;
   }
 
   private extractLinkedinHandle(data: Record<string, unknown>): string | null {
     const links = data.links as Array<{ name: string; url: string }> | undefined;
     if (!links) return null;
-    
+
     const linkedinLink = links.find((link) => link.name === 'linkedin');
-    
+
     if (linkedinLink?.url) {
       return linkedinLink.url;
     }
-    
+
     return null;
   }
 
-  private isValidBrandfetchResponse(data: unknown): data is { 
-    name: string; 
+  private isValidBrandfetchResponse(data: unknown): data is {
+    name: string;
     links?: Array<{ name: string; url: string }>;
   } {
     if (!data || typeof data !== 'object') {
       return false;
     }
-    
+
     const response = data as Record<string, unknown>;
     return typeof response.name === 'string';
   }
@@ -497,7 +442,7 @@ export class BrandNameProviderChain implements BrandNameProvider {
     for (const provider of this.providers) {
       if (provider.canFetch(url)) {
         const data = await provider.fetch(url);
-        
+
         // Merge non-null values from provider
         if (!result.brandName && data.brandName) {
           result.brandName = data.brandName;
@@ -508,14 +453,14 @@ export class BrandNameProviderChain implements BrandNameProvider {
         if (!result.linkedinHandle && data.linkedinHandle) {
           result.linkedinHandle = data.linkedinHandle;
         }
-        
+
         // If we have all data, we can stop
         if (result.brandName && result.twitterHandle && result.linkedinHandle) {
           break;
         }
       }
     }
-    
+
     return result;
   }
 }
@@ -525,11 +470,11 @@ export class BrandNameProviderChain implements BrandNameProvider {
  */
 export function createDefaultBrandNameProviderChain(): BrandNameProviderChain {
   const chain = new BrandNameProviderChain();
-  
+
   // Priority order: HTML scraping first (most accurate), then Brandfetch API, then URL fallback
   chain.addProvider(new HtmlScrapingProvider());
   chain.addProvider(new BrandfetchProvider());
   chain.addProvider(new UrlFallbackProvider());
-  
+
   return chain;
 }
