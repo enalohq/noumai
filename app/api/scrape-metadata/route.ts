@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createDefaultBrandNameProviderChain,
   BrandNameProviderChain,
+  type BrandData,
 } from "@/lib/brand/brand-name-providers";
 import {
   extractTwitterHandle,
   extractLinkedinUrl,
 } from "@/lib/brand/social-handle-extractor";
 import { extractCountry } from "@/lib/utils/country-detector";
+
+interface FetchHtmlResult {
+  response: Response;
+  html: string;
+}
 
 // Lazy initialization of provider chain
 let brandNameProviderChain: BrandNameProviderChain | null = null;
@@ -163,7 +169,7 @@ function isBotBlockedContent(html: string): boolean {
  * - SRP: Single responsibility for fetching with alternative headers
  * - OCP: Can be extended with new header configurations without modification
  */
-async function fetchWithAlternativeHeaders(url: string): Promise<Response | null> {
+async function fetchWithAlternativeHeaders(url: string): Promise<FetchHtmlResult | null> {
   // Enhanced user agents with more diversity
   const userAgents = [
     // Chrome on various platforms
@@ -257,7 +263,7 @@ async function fetchWithAlternativeHeaders(url: string): Promise<Response | null
         
         // Check if content indicates bot blocking
         if (!isBotBlockedContent(html)) {
-          return response;
+          return { response, html };
         }
         
         // If bot blocked, try next configuration
@@ -314,16 +320,23 @@ export async function GET(request: NextRequest) {
       signal: AbortSignal.timeout(15000),
     });
 
-    // If fetch fails, try with alternative headers
-    if (!response.ok) {
-      response = await fetchWithAlternativeHeaders(fetchUrl.toString()) || response;
-    }
-
     let brandName: string | null = null;
     let html = "";
 
     if (response.ok) {
       html = await response.text();
+    }
+
+    // Retry with alternative headers if the first fetch failed or returned bot-blocked HTML
+    if (!response.ok || isBotBlockedContent(html)) {
+      const alternativeResult = await fetchWithAlternativeHeaders(fetchUrl.toString());
+      if (alternativeResult) {
+        response = alternativeResult.response;
+        html = alternativeResult.html;
+      }
+    }
+
+    if (response.ok && html) {
       
       // Try to extract brand name from HTML first
       const ogSiteName = extractMeta(html, ["og:site_name"]);
@@ -345,17 +358,28 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Always use provider chain for all data (includes HTML scraping and Brandfetch API)
-    const providerData = await getBrandNameProviderChain().fetch(fetchUrl.toString());
+    const directTwitterHandle = html ? extractTwitterHandle(html) : null;
+    const directLinkedinHandle = html ? extractLinkedinUrl(html) : null;
+
+    let providerData: BrandData = {
+      brandName: null,
+      twitterHandle: null,
+      linkedinHandle: null,
+    };
+
+    // Only fall back to the provider chain for fields still missing after direct HTML extraction
+    if (!brandName || !directTwitterHandle || !directLinkedinHandle) {
+      providerData = await getBrandNameProviderChain().fetch(fetchUrl.toString());
+    }
     
     // Use provider chain for brandName if not found from HTML
     if (!brandName) {
       brandName = providerData.brandName;
     }
     
-    // Use provider chain for social handles
-    const twitterHandle = providerData.twitterHandle;
-    const linkedinHandle = providerData.linkedinHandle;
+    // Prefer direct extraction from already-fetched HTML, then fall back to provider chain
+    const twitterHandle = directTwitterHandle || providerData.twitterHandle;
+    const linkedinHandle = directLinkedinHandle || providerData.linkedinHandle;
 
     // Extract country from domain or website content
     const country = extractCountry(fetchUrl.hostname, html);
