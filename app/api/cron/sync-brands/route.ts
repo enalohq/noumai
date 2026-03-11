@@ -32,10 +32,9 @@ export async function GET(request: NextRequest) {
   try {
     // 0. Ensure essential brands are always up to date
     // ONLY run this on the first cron run of the day (e.g., midnight) to avoid redundant DB pressure
-    if (new Date().getHours() === 0 && new Date().getMinutes() < 30) {
+      if (new Date().getHours() === 0 && new Date().getMinutes() < 30) {
       console.log("Cron: Syncing essential brand overrides...");
       for (const b of ESSENTIAL_BRANDS) {
-        // @ts-expect-error - Prisma model might not be recognized by IDE yet
         await prisma.brandAuthority.upsert({
           where: { hostname: b.hostname },
           update: b,
@@ -86,7 +85,6 @@ export async function GET(request: NextRequest) {
         if (hostname) {
           const sanitizedName = BrandNameSanitizer.sanitize(item.name.value) || item.name.value;
           
-          // @ts-expect-error - Prisma model might not be recognized by IDE yet
           await prisma.brandAuthority.upsert({
             where: { hostname },
             update: {
