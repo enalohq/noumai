@@ -15,6 +15,9 @@
     "test:components": "jest __tests__/components --coverage",
     "test:lib": "jest __tests__/lib --coverage",
     "test:unit": "jest __tests__/unit --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:scrape-metadata:domains": "node scripts/test-scrape-metadata-domains.js",
     "test:scraper": "node --env-file=.env scripts/test-scraper.js",
     "test:pillar": "node scripts/test-pillar.js",
     "test:auth": "node scripts/test-auth.js",
@@ -55,6 +58,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -340,6 +340,16 @@ describe("Country Detection", () => {
       const result = extractCountry("example.com", html);
       expect(result).toBe("Singapore");
     });
+
+    it("should not match US state abbreviations inside JSON-like data attributes", () => {
+      const html = `
+        <div
+          data-m='{"cN":"Footer_Education_Office Education_nav","id":"footer-edu"}'
+        ></div>
+      `;
+      const result = extractCountry("example.com", html);
+      expect(result).toBeNull();
+    });
   });
 
   describe("Business registration number detection", () => {
