@@ -27,7 +27,6 @@ export class BrandAuthorityService {
       for (let i = 0; i < hostParts.length - 1; i++) {
         const currentDomain = hostParts.slice(i).join(".");
         
-        // @ts-expect-error - Prisma client property may be missing until next generate run
         const data = await prisma.brandAuthority.findUnique({
           where: { hostname: currentDomain }
         });
