@@ -15,7 +15,8 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  const isPublicPath = req.nextUrl.pathname.startsWith("/auth/signin") ||
+  const isPublicPath = req.nextUrl.pathname.startsWith("/api/auth") ||
+    req.nextUrl.pathname.startsWith("/auth/signin") ||
     req.nextUrl.pathname.startsWith("/auth/signup") ||
     req.nextUrl.pathname.startsWith("/auth/error") ||
     req.nextUrl.pathname.startsWith("/demo");
