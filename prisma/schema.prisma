@@ -198,3 +198,14 @@ model AeoAudit {
 
   @@index([workspaceId, createdAt])
 }
+
+model BrandAuthority {
+  hostname  String  @id
+  brandName String
+  country   String
+  twitter   String?
+  linkedin  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

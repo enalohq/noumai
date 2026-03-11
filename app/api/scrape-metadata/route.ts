@@ -4,12 +4,10 @@ import {
   BrandNameProviderChain,
   type BrandData,
 } from "@/lib/brand/brand-name-providers";
-import {
-  extractTwitterHandle,
-  extractLinkedinUrl,
-} from "@/lib/brand/social-handle-extractor";
+import { extractTwitterHandle, extractLinkedinUrl } from "@/lib/brand/social-handle-extractor";
 import { extractCountry } from "@/lib/utils/country-detector";
 import { BrandNameSanitizer } from "@/lib/brand/brand-name-sanitizer";
+import { BrandAuthorityService } from "@/lib/brand/brand-authority-service";
 
 interface FetchHtmlResult {
   response: Response;
@@ -228,6 +226,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
   }
 
+  const authoritativeData = await BrandAuthorityService.getAuthoritativeBrandData(fetchUrl.hostname);
+
+  // Short-circuit: If we have complete authoritative data (Name, Country, Twitter, LinkedIn), 
+  // skip the expensive and risky scraping entirely.
+  if (authoritativeData && authoritativeData.twitterHandle && authoritativeData.linkedinHandle) {
+    return NextResponse.json({
+      brandName: authoritativeData.brandName,
+      twitterHandle: authoritativeData.twitterHandle,
+      linkedinHandle: authoritativeData.linkedinHandle,
+      country: authoritativeData.country,
+      url: fetchUrl.toString(),
+    });
+  }
+
   try {
     let response = await fetch(fetchUrl.toString(), {
       headers: {
@@ -305,15 +317,35 @@ export async function GET(request: NextRequest) {
     // Extract country from domain or website content
     const country = extractCountry(fetchUrl.hostname, html);
 
+    // Merge authoritative data with scraped/provider data
+    // Auth data takes absolute priority for consistency
+    const finalBrandName = authoritativeData?.brandName || brandName || "";
+    const finalTwitter = authoritativeData?.twitterHandle || twitterHandle || "";
+    const finalLinkedin = authoritativeData?.linkedinHandle || linkedinHandle || "";
+    const finalCountry = authoritativeData?.country || country || "";
+
     return NextResponse.json({
-      brandName: brandName || "",
-      twitterHandle: twitterHandle || "",
-      linkedinHandle: linkedinHandle || "",
-      country: country || "",
+      brandName: finalBrandName,
+      twitterHandle: finalTwitter,
+      linkedinHandle: finalLinkedin,
+      country: finalCountry,
       url: fetchUrl.toString(),
     });
   } catch (error) {
     console.error("Scrape metadata error:", error);
+
+    // If we have any authoritative data, return it even if the fetch failed
+    if (authoritativeData) {
+      return NextResponse.json({
+        brandName: authoritativeData.brandName,
+        twitterHandle: authoritativeData.twitterHandle || "",
+        linkedinHandle: authoritativeData.linkedinHandle || "",
+        country: authoritativeData.country,
+        url: fetchUrl.toString(),
+        note: "Data from authority map (fetch failed)"
+      });
+    }
+
     if (error instanceof Error && error.name === "TimeoutError") {
       return NextResponse.json({ error: "Request timed out. The website may be slow." }, { status: 408 });
     }
