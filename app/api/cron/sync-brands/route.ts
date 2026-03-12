@@ -43,22 +43,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 1. Determine which country to sync this round
-    // Use current hour as a rotation index
-    const hour = new Date().getHours();
-    const countryISO = DISCOVERY_COUNTRIES[hour % DISCOVERY_COUNTRIES.length];
+  // 1. Determine which country to sync this round
+  // Use current hour as a rotation index
+  const hour = new Date().getHours();
+  const countryISO = request.nextUrl.searchParams.get("country") || DISCOVERY_COUNTRIES[hour % DISCOVERY_COUNTRIES.length];
 
-    // Use the minute to pick a random offset (0, 1000, 2000, etc) to discover more data over time
-    // This allows many runs to eventually cover all data
-    const batchOffset = (new Date().getMinutes() % 10) * 1000;
-    const batchLimit = 1000;
+  // Use the minute to pick a random offset (0, 1000, 2000, etc) to discover more data over time
+  // This allows many runs to eventually cover all data
+  const batchOffset = request.nextUrl.searchParams.get("offset") ? parseInt(request.nextUrl.searchParams.get("offset")!) : (new Date().getMinutes() % 3) * 1000;
+  const batchLimit = request.nextUrl.searchParams.get("limit") ? parseInt(request.nextUrl.searchParams.get("limit")!) : 1000;
 
     console.log(`Cron: Syncing ${countryISO} (Offset: ${batchOffset}, Limit: ${batchLimit})...`);
 
     const query = getCountryDiscoveryQuery(countryISO, batchLimit, batchOffset);
-    const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}&format=json`;
+    const wikidataUrl = `https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}&format=json`;
+    console.log(`DEBUG - Wikidata Query URL: ${wikidataUrl}`);
 
-    const response = await fetch(url, {
+    const response = await fetch(wikidataUrl, {
       headers: {
         'User-Agent': DISCOVERY_USER_AGENT,
         'Accept': 'application/sparql-results+json'
@@ -71,7 +72,10 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log(`DEBUG - Wikidata response:`, JSON.stringify(data, null, 2));
     const results = data.results.bindings;
+
+    console.log(`DEBUG - Total results from Wikidata: ${results?.length || 0}`);
 
     let syncCount = 0;
 
@@ -84,6 +88,8 @@ export async function GET(request: NextRequest) {
 
         if (hostname) {
           const sanitizedName = BrandNameSanitizer.sanitize(item.name.value) || item.name.value;
+          
+          console.log(`DEBUG - Syncing: ${hostname} (${sanitizedName})`);
           
           await prisma.brandAuthority.upsert({
             where: { hostname },
@@ -102,9 +108,11 @@ export async function GET(request: NextRequest) {
             }
           });
           syncCount++;
+          console.log(`DEBUG - Success: ${hostname}`);
         }
-      } catch {
+      } catch (error) {
         // Skip invalid rows
+        console.error(`DEBUG - Error syncing ${item.website?.value}:`, error);
       }
     }
 
